@@ -1,0 +1,3 @@
+# Free-text answers are LLM-graded, not self-assessed
+
+Anki-style self-assessment (show the answer, honestly judge yourself) was the obvious alternative for Recall and Scenario questions, since it needs no grading infrastructure at all. We chose LLM grading instead, on a 3-way correct/partial/incorrect scale, because self-assessment is easy to fool yourself with — the whole point of tracking Confidence separately is to catch overconfidence, which self-graded correctness would undermine. The app already depends on an LLM to generate questions, so grading is a natural extension rather than new infrastructure. This is a real trade-off: LLM grading adds latency, cost, and a dependency on grading quality that self-assessment wouldn't have.

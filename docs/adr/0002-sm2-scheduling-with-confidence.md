@@ -1,0 +1,3 @@
+# Spaced repetition adapts SM-2, using confidence as an ease-factor modifier
+
+We considered a simple Leitner-style scheduler (binary correct/incorrect moves a Concept up or down a fixed set of boxes) versus adapting SM-2's interval/ease-factor model to also account for self-reported Confidence. We chose the SM-2 adaptation: Correctness (correct/partial/incorrect) drives the base interval change, and Confidence (guessed/partial/confident) modifies the ease factor, so a correct-but-guessed answer schedules sooner than a correct-and-confident one. This is harder to reverse than it looks, since historical Attempts are graded against this combined signal from day one, and switching schedulers later would require migrating or discarding accumulated review state.
