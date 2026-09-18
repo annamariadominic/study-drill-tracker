@@ -1,0 +1,123 @@
+import { randomUUID } from "node:crypto";
+import { NotFoundError } from "./errors";
+import type { SyllabusRepository } from "./repository";
+import type { Concept, ConceptStatus, Domain, Subject } from "./types";
+
+export class FakeSyllabusRepository implements SyllabusRepository {
+  private domains = new Map<string, Domain>();
+  private subjects = new Map<string, Subject>();
+  private concepts = new Map<string, Concept>();
+
+  async listDomains(): Promise<Domain[]> {
+    return [...this.domains.values()];
+  }
+
+  async getDomain(id: string): Promise<Domain | null> {
+    return this.domains.get(id) ?? null;
+  }
+
+  async createDomain(input: { name: string }): Promise<Domain> {
+    const domain: Domain = {
+      id: randomUUID(),
+      name: input.name,
+      createdAt: new Date().toISOString(),
+    };
+    this.domains.set(domain.id, domain);
+    return domain;
+  }
+
+  async updateDomain(id: string, input: { name: string }): Promise<Domain> {
+    const domain = this.domains.get(id);
+    if (!domain) {
+      throw new NotFoundError("Domain", id);
+    }
+    const updated: Domain = { ...domain, name: input.name };
+    this.domains.set(id, updated);
+    return updated;
+  }
+
+  async listSubjects(domainId: string): Promise<Subject[]> {
+    return [...this.subjects.values()].filter((subject) => subject.domainId === domainId);
+  }
+
+  async getSubject(id: string): Promise<Subject | null> {
+    return this.subjects.get(id) ?? null;
+  }
+
+  async createSubject(domainId: string, input: { name: string }): Promise<Subject> {
+    const subject: Subject = {
+      id: randomUUID(),
+      domainId,
+      name: input.name,
+      createdAt: new Date().toISOString(),
+    };
+    this.subjects.set(subject.id, subject);
+    return subject;
+  }
+
+  async updateSubject(id: string, input: { name: string }): Promise<Subject> {
+    const subject = this.subjects.get(id);
+    if (!subject) {
+      throw new NotFoundError("Subject", id);
+    }
+    const updated: Subject = { ...subject, name: input.name };
+    this.subjects.set(id, updated);
+    return updated;
+  }
+
+  async listConcepts(subjectId: string): Promise<Concept[]> {
+    return [...this.concepts.values()].filter((concept) => concept.subjectId === subjectId);
+  }
+
+  async getConcept(id: string): Promise<Concept | null> {
+    return this.concepts.get(id) ?? null;
+  }
+
+  async createConcept(
+    subjectId: string,
+    input: { name: string; notes?: string | null },
+  ): Promise<Concept> {
+    const concept: Concept = {
+      id: randomUUID(),
+      subjectId,
+      name: input.name,
+      notes: input.notes ?? null,
+      status: "planned",
+      studiedAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    this.concepts.set(concept.id, concept);
+    return concept;
+  }
+
+  async updateConcept(
+    id: string,
+    input: { name?: string; notes?: string | null },
+  ): Promise<Concept> {
+    const concept = this.concepts.get(id);
+    if (!concept) {
+      throw new NotFoundError("Concept", id);
+    }
+    const updated: Concept = {
+      ...concept,
+      name: input.name ?? concept.name,
+      notes: input.notes === undefined ? concept.notes : input.notes,
+    };
+    this.concepts.set(id, updated);
+    return updated;
+  }
+
+  async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {
+    const concept = this.concepts.get(id);
+    if (!concept) {
+      throw new NotFoundError("Concept", id);
+    }
+    const updated: Concept = {
+      ...concept,
+      status,
+      studiedAt: status === "studied" ? new Date().toISOString() : null,
+    };
+    this.concepts.set(id, updated);
+    return updated;
+  }
+}
