@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { initialReviewSchedule, pullReviewCloser, scheduleFromFields } from "@/lib/study/scheduling";
 import { NotFoundError } from "./errors";
 import type { SyllabusRepository } from "./repository";
 import type { Concept, ConceptStatus, Domain, Subject } from "./types";
@@ -85,6 +86,9 @@ export class FakeSyllabusRepository implements SyllabusRepository {
       status: "planned",
       studiedAt: null,
       createdAt: new Date().toISOString(),
+      reviewIntervalDays: null,
+      reviewEaseFactor: null,
+      nextReviewDueAt: null,
     };
     this.concepts.set(concept.id, concept);
     return concept;
@@ -98,10 +102,25 @@ export class FakeSyllabusRepository implements SyllabusRepository {
     if (!concept) {
       throw new NotFoundError("Concept", id);
     }
+    const notesChanged = input.notes !== undefined && input.notes !== concept.notes;
+    const currentSchedule = scheduleFromFields(concept);
+
+    const schedule =
+      notesChanged && concept.status === "studied" && currentSchedule
+        ? pullReviewCloser(currentSchedule)
+        : null;
+
     const updated: Concept = {
       ...concept,
       name: input.name ?? concept.name,
       notes: input.notes === undefined ? concept.notes : input.notes,
+      ...(schedule
+        ? {
+            reviewIntervalDays: schedule.intervalDays,
+            reviewEaseFactor: schedule.easeFactor,
+            nextReviewDueAt: schedule.nextDueAt,
+          }
+        : {}),
     };
     this.concepts.set(id, updated);
     return updated;
@@ -112,10 +131,32 @@ export class FakeSyllabusRepository implements SyllabusRepository {
     if (!concept) {
       throw new NotFoundError("Concept", id);
     }
+    const schedule = status === "studied" ? initialReviewSchedule() : null;
     const updated: Concept = {
       ...concept,
       status,
       studiedAt: status === "studied" ? new Date().toISOString() : null,
+      reviewIntervalDays: schedule?.intervalDays ?? null,
+      reviewEaseFactor: schedule?.easeFactor ?? null,
+      nextReviewDueAt: schedule?.nextDueAt ?? null,
+    };
+    this.concepts.set(id, updated);
+    return updated;
+  }
+
+  async updateConceptReviewSchedule(
+    id: string,
+    schedule: { intervalDays: number; easeFactor: number; nextDueAt: string },
+  ): Promise<Concept> {
+    const concept = this.concepts.get(id);
+    if (!concept) {
+      throw new NotFoundError("Concept", id);
+    }
+    const updated: Concept = {
+      ...concept,
+      reviewIntervalDays: schedule.intervalDays,
+      reviewEaseFactor: schedule.easeFactor,
+      nextReviewDueAt: schedule.nextDueAt,
     };
     this.concepts.set(id, updated);
     return updated;

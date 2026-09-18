@@ -47,4 +47,48 @@ describe("syllabus orchestration (against the fake repository)", () => {
     expect(concepts).toHaveLength(1);
     expect(concepts[0]).toEqual(enriched);
   });
+
+  it("pulls a studied Concept's next review closer when its notes are enriched", async () => {
+    const repo: SyllabusRepository = new FakeSyllabusRepository();
+    const { concept } = await buildSyllabus(repo);
+
+    const studied = await repo.setConceptStatus(concept.id, "studied");
+    expect(studied.reviewIntervalDays).toBe(1);
+    expect(studied.nextReviewDueAt).not.toBeNull();
+
+    // Grow the interval first via a review-schedule update, so halving it is observable.
+    const grown = await repo.updateConceptReviewSchedule(concept.id, {
+      intervalDays: 10,
+      easeFactor: 2.6,
+      nextDueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(grown.reviewIntervalDays).toBe(10);
+
+    const enriched = await repo.updateConcept(concept.id, {
+      notes: "Retrying a request has no additional effect beyond the first.",
+    });
+
+    // Halved, not reset — and the ease factor is untouched.
+    expect(enriched.reviewIntervalDays).toBe(5);
+    expect(enriched.reviewEaseFactor).toBe(2.6);
+    expect(new Date(enriched.nextReviewDueAt ?? 0).getTime()).toBeLessThan(
+      new Date(grown.nextReviewDueAt ?? 0).getTime(),
+    );
+
+    // Editing notes again with the same value is a no-op on the schedule.
+    const unchanged = await repo.updateConcept(concept.id, {
+      notes: "Retrying a request has no additional effect beyond the first.",
+    });
+    expect(unchanged.reviewIntervalDays).toBe(5);
+
+    // A planned (never-studied) Concept has no schedule to pull closer.
+    const plannedConcept = await repo.createConcept(
+      (await repo.getConcept(concept.id))!.subjectId,
+      { name: "Backpressure" },
+    );
+    const plannedWithNotes = await repo.updateConcept(plannedConcept.id, {
+      notes: "Slow the producer down.",
+    });
+    expect(plannedWithNotes.reviewIntervalDays).toBeNull();
+  });
 });

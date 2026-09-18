@@ -21,4 +21,7 @@ export type Concept = {
   status: ConceptStatus;
   studiedAt: string | null;
   createdAt: string;
+  reviewIntervalDays: number | null;
+  reviewEaseFactor: number | null;
+  nextReviewDueAt: string | null;
 };

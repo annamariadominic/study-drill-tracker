@@ -22,4 +22,8 @@ export interface SyllabusRepository {
     input: { name?: string; notes?: string | null },
   ): Promise<Concept>;
   setConceptStatus(id: string, status: ConceptStatus): Promise<Concept>;
+  updateConceptReviewSchedule(
+    id: string,
+    schedule: { intervalDays: number; easeFactor: number; nextDueAt: string },
+  ): Promise<Concept>;
 }

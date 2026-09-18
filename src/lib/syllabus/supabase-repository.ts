@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { initialReviewSchedule, pullReviewCloser, scheduleFromFields } from "@/lib/study/scheduling";
 import { NotFoundError } from "./errors";
 import type { SyllabusRepository } from "./repository";
 import type { Concept, ConceptStatus, Domain, Subject } from "./types";
@@ -13,6 +14,9 @@ type ConceptRow = {
   status: ConceptStatus;
   studied_at: string | null;
   created_at: string;
+  review_interval_days: number | null;
+  review_ease_factor: number | null;
+  next_review_due_at: string | null;
 };
 
 function toDomain(row: DomainRow): Domain {
@@ -32,6 +36,9 @@ function toConcept(row: ConceptRow): Concept {
     status: row.status,
     studiedAt: row.studied_at,
     createdAt: row.created_at,
+    reviewIntervalDays: row.review_interval_days,
+    reviewEaseFactor: row.review_ease_factor,
+    nextReviewDueAt: row.next_review_due_at,
   };
 }
 
@@ -158,9 +165,29 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
     id: string,
     input: { name?: string; notes?: string | null },
   ): Promise<Concept> {
-    const patch: Partial<Pick<ConceptRow, "name" | "notes">> = {};
+    const existing = await this.getConcept(id);
+    if (!existing) throw new NotFoundError("Concept", id);
+
+    const notesChanged = input.notes !== undefined && input.notes !== existing.notes;
+    const currentSchedule = scheduleFromFields(existing);
+    const schedule =
+      notesChanged && existing.status === "studied" && currentSchedule
+        ? pullReviewCloser(currentSchedule)
+        : null;
+
+    const patch: Partial<
+      Pick<
+        ConceptRow,
+        "name" | "notes" | "review_interval_days" | "review_ease_factor" | "next_review_due_at"
+      >
+    > = {};
     if (input.name !== undefined) patch.name = input.name;
     if (input.notes !== undefined) patch.notes = input.notes;
+    if (schedule) {
+      patch.review_interval_days = schedule.intervalDays;
+      patch.review_ease_factor = schedule.easeFactor;
+      patch.next_review_due_at = schedule.nextDueAt;
+    }
 
     const { data, error } = await this.client
       .from("concepts")
@@ -174,9 +201,35 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {
+    const schedule = status === "studied" ? initialReviewSchedule() : null;
     const { data, error } = await this.client
       .from("concepts")
-      .update({ status, studied_at: status === "studied" ? new Date().toISOString() : null })
+      .update({
+        status,
+        studied_at: status === "studied" ? new Date().toISOString() : null,
+        review_interval_days: schedule?.intervalDays ?? null,
+        review_ease_factor: schedule?.easeFactor ?? null,
+        next_review_due_at: schedule?.nextDueAt ?? null,
+      })
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new NotFoundError("Concept", id);
+    return toConcept(data as ConceptRow);
+  }
+
+  async updateConceptReviewSchedule(
+    id: string,
+    schedule: { intervalDays: number; easeFactor: number; nextDueAt: string },
+  ): Promise<Concept> {
+    const { data, error } = await this.client
+      .from("concepts")
+      .update({
+        review_interval_days: schedule.intervalDays,
+        review_ease_factor: schedule.easeFactor,
+        next_review_due_at: schedule.nextDueAt,
+      })
       .eq("id", id)
       .select()
       .maybeSingle();
