@@ -7,6 +7,9 @@ export default function Home() {
       <p>
         <Link href="/domains">Manage your syllabus</Link>
       </p>
+      <p>
+        <Link href="/study">Study</Link>
+      </p>
     </main>
   );
 }
