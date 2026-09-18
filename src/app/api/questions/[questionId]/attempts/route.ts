@@ -4,6 +4,7 @@ import { NotFoundError } from "@/lib/questions/errors";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import type { Confidence } from "@/lib/questions/types";
 import { submitAttempt } from "@/lib/study/submit-attempt";
+import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
 const VALID_CONFIDENCES: Confidence[] = ["guessed", "partial", "confident"];
 
@@ -28,7 +29,11 @@ export async function POST(
 
   try {
     const attempt = await submitAttempt(
-      { questionsRepo: getQuestionsRepository(), llmPort: getLlmPort() },
+      {
+        questionsRepo: getQuestionsRepository(),
+        syllabusRepo: getSyllabusRepository(),
+        llmPort: getLlmPort(),
+      },
       {
         questionId,
         confidence: confidence as Confidence,

@@ -2,14 +2,24 @@ import { describe, expect, it } from "vitest";
 import { FakeQuestionsRepository } from "@/lib/questions/fake-repository";
 import { NotFoundError as QuestionsNotFoundError } from "@/lib/questions/errors";
 import { FakeLlmPort } from "@/lib/llm/fake-port";
+import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
 import { submitAttempt } from "./submit-attempt";
+
+async function buildStudiedConcept(syllabusRepo: FakeSyllabusRepository) {
+  const domain = await syllabusRepo.createDomain({ name: "Software Engineering" });
+  const subject = await syllabusRepo.createSubject(domain.id, { name: "System Design" });
+  const concept = await syllabusRepo.createConcept(subject.id, { name: "Idempotency" });
+  return syllabusRepo.setConceptStatus(concept.id, "studied");
+}
 
 describe("submitAttempt", () => {
   it("grades a flashcard answer mechanically and never calls the LLM port", async () => {
     const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
     const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: "concept-1",
+      conceptId: concept.id,
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -17,7 +27,7 @@ describe("submitAttempt", () => {
     });
 
     const attempt = await submitAttempt(
-      { questionsRepo, llmPort },
+      { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "confident", selectedOptionIndex: 0 },
     );
 
@@ -28,9 +38,11 @@ describe("submitAttempt", () => {
 
   it("marks a wrong flashcard selection incorrect", async () => {
     const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
     const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: "concept-1",
+      conceptId: concept.id,
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -38,7 +50,7 @@ describe("submitAttempt", () => {
     });
 
     const attempt = await submitAttempt(
-      { questionsRepo, llmPort },
+      { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "guessed", selectedOptionIndex: 1 },
     );
 
@@ -48,18 +60,20 @@ describe("submitAttempt", () => {
 
   it("grades a recall answer via the LLM port", async () => {
     const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
     const llmPort = new FakeLlmPort(undefined, async () => ({
       correctness: "partial",
       explanation: "Close, but missing detail.",
     }));
+    const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: "concept-1",
+      conceptId: concept.id,
       type: "recall",
       prompt: "Explain idempotency.",
     });
 
     const attempt = await submitAttempt(
-      { questionsRepo, llmPort },
+      { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
     );
 
@@ -70,9 +84,11 @@ describe("submitAttempt", () => {
 
   it("rejects a flashcard selectedOptionIndex that is out of range", async () => {
     const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
     const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: "concept-1",
+      conceptId: concept.id,
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -81,7 +97,7 @@ describe("submitAttempt", () => {
 
     await expect(
       submitAttempt(
-        { questionsRepo, llmPort },
+        { questionsRepo, syllabusRepo, llmPort },
         { questionId: question.id, confidence: "guessed", selectedOptionIndex: 99 },
       ),
     ).rejects.toThrow(/valid option index/);
@@ -89,11 +105,12 @@ describe("submitAttempt", () => {
 
   it("throws NotFoundError for a missing question", async () => {
     const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
     const llmPort = new FakeLlmPort();
 
     await expect(
       submitAttempt(
-        { questionsRepo, llmPort },
+        { questionsRepo, syllabusRepo, llmPort },
         { questionId: "missing", confidence: "guessed", submittedAnswer: "x" },
       ),
     ).rejects.toThrow(QuestionsNotFoundError);
@@ -101,20 +118,92 @@ describe("submitAttempt", () => {
 
   it("propagates an LLM grading failure instead of persisting a broken attempt", async () => {
     const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
     const llmPort = new FakeLlmPort(undefined, async () => {
       throw new Error("LLM is down");
     });
+    const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: "concept-1",
+      conceptId: concept.id,
       type: "recall",
       prompt: "Explain idempotency.",
     });
 
     await expect(
       submitAttempt(
-        { questionsRepo, llmPort },
+        { questionsRepo, syllabusRepo, llmPort },
         { questionId: question.id, confidence: "guessed", submittedAnswer: "x" },
       ),
     ).rejects.toThrow("LLM is down");
+  });
+
+  it("updates the Concept's review schedule after a correct attempt", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "confident", selectedOptionIndex: 0 },
+    );
+
+    const updatedConcept = await syllabusRepo.getConcept(concept.id);
+    expect(updatedConcept?.reviewIntervalDays).toBeGreaterThan(concept.reviewIntervalDays ?? 0);
+    expect(updatedConcept?.nextReviewDueAt).not.toBe(concept.nextReviewDueAt);
+  });
+
+  it("resets the Concept's review interval to one day after an incorrect attempt", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "guessed", selectedOptionIndex: 1 },
+    );
+
+    const updatedConcept = await syllabusRepo.getConcept(concept.id);
+    expect(updatedConcept?.reviewIntervalDays).toBe(1);
+  });
+
+  it("leaves a Concept's review schedule null if it has since been marked planned again", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+    await syllabusRepo.setConceptStatus(concept.id, "planned");
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "confident", selectedOptionIndex: 0 },
+    );
+
+    const updatedConcept = await syllabusRepo.getConcept(concept.id);
+    expect(updatedConcept?.status).toBe("planned");
+    expect(updatedConcept?.reviewIntervalDays).toBeNull();
+    expect(updatedConcept?.nextReviewDueAt).toBeNull();
   });
 });
