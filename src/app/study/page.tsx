@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listStudiedConcepts } from "@/lib/syllabus/list-studied-concepts";
 
@@ -12,6 +13,9 @@ export default async function StudyPage({
   return (
     <main style={{ maxWidth: 480, margin: "4rem auto", padding: "0 1rem" }}>
       <h1>Study</h1>
+      <p>
+        <Link href="/study/due">See what&apos;s due for review &rarr;</Link>
+      </p>
 
       {studiedConcepts.length === 0 ? (
         <p>No studied Concepts yet. Mark a Concept as studied on its Subject page first.</p>
