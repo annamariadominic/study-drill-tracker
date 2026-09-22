@@ -1,10 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { QuestionsRepository } from "./repository";
+import type { CreateQuestionInput, QuestionsRepository } from "./repository";
 import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
 
 type QuestionRow = {
   id: string;
   concept_id: string;
+  drill_id: string | null;
+  position: number | null;
   type: QuestionType;
   prompt: string;
   options: string[] | null;
@@ -26,6 +28,8 @@ function toQuestion(row: QuestionRow): Question {
   return {
     id: row.id,
     conceptId: row.concept_id,
+    drillId: row.drill_id,
+    position: row.position,
     type: row.type,
     prompt: row.prompt,
     options: row.options,
@@ -49,17 +53,13 @@ function toAttempt(row: AttemptRow): Attempt {
 export class SupabaseQuestionsRepository implements QuestionsRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async createQuestion(input: {
-    conceptId: string;
-    type: QuestionType;
-    prompt: string;
-    options?: string[] | null;
-    correctOptionIndex?: number | null;
-  }): Promise<Question> {
+  async createQuestion(input: CreateQuestionInput): Promise<Question> {
     const { data, error } = await this.client
       .from("questions")
       .insert({
         concept_id: input.conceptId,
+        drill_id: input.drillId ?? null,
+        position: input.position ?? null,
         type: input.type,
         prompt: input.prompt,
         options: input.options ?? null,
@@ -79,6 +79,16 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
       .maybeSingle();
     if (error) throw error;
     return data ? toQuestion(data as QuestionRow) : null;
+  }
+
+  async listDrillQuestions(drillId: string): Promise<Question[]> {
+    const { data, error } = await this.client
+      .from("questions")
+      .select("*")
+      .eq("drill_id", drillId)
+      .order("position", { ascending: true });
+    if (error) throw error;
+    return (data as QuestionRow[]).map(toQuestion);
   }
 
   async createAttempt(input: {
@@ -111,5 +121,18 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
       .maybeSingle();
     if (error) throw error;
     return data ? toAttempt(data as AttemptRow) : null;
+  }
+
+  async listAttemptsForQuestions(questionIds: string[]): Promise<Attempt[]> {
+    if (questionIds.length === 0) {
+      return [];
+    }
+    const { data, error } = await this.client
+      .from("attempts")
+      .select("*")
+      .in("question_id", questionIds)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data as AttemptRow[]).map(toAttempt);
   }
 }

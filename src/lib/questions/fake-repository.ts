@@ -1,21 +1,17 @@
 import { randomUUID } from "node:crypto";
-import type { QuestionsRepository } from "./repository";
-import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
+import type { CreateQuestionInput, QuestionsRepository } from "./repository";
+import type { Attempt, Confidence, Correctness, Question } from "./types";
 
 export class FakeQuestionsRepository implements QuestionsRepository {
   private questions = new Map<string, Question>();
   private attempts = new Map<string, Attempt>();
 
-  async createQuestion(input: {
-    conceptId: string;
-    type: QuestionType;
-    prompt: string;
-    options?: string[] | null;
-    correctOptionIndex?: number | null;
-  }): Promise<Question> {
+  async createQuestion(input: CreateQuestionInput): Promise<Question> {
     const question: Question = {
       id: randomUUID(),
       conceptId: input.conceptId,
+      drillId: input.drillId ?? null,
+      position: input.position ?? null,
       type: input.type,
       prompt: input.prompt,
       options: input.options ?? null,
@@ -28,6 +24,12 @@ export class FakeQuestionsRepository implements QuestionsRepository {
 
   async getQuestion(id: string): Promise<Question | null> {
     return this.questions.get(id) ?? null;
+  }
+
+  async listDrillQuestions(drillId: string): Promise<Question[]> {
+    return [...this.questions.values()]
+      .filter((question) => question.drillId === drillId)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   }
 
   async createAttempt(input: {
@@ -52,5 +54,10 @@ export class FakeQuestionsRepository implements QuestionsRepository {
 
   async getAttempt(id: string): Promise<Attempt | null> {
     return this.attempts.get(id) ?? null;
+  }
+
+  async listAttemptsForQuestions(questionIds: string[]): Promise<Attempt[]> {
+    const wanted = new Set(questionIds);
+    return [...this.attempts.values()].filter((attempt) => wanted.has(attempt.questionId));
   }
 }
