@@ -1,4 +1,5 @@
 import type { LlmPort } from "@/lib/llm/port";
+import { questionFieldsFromGenerated } from "@/lib/questions/from-generated";
 import type { QuestionsRepository } from "@/lib/questions/repository";
 import type { Question, QuestionType } from "@/lib/questions/types";
 import { NotFoundError } from "@/lib/syllabus/errors";
@@ -29,9 +30,6 @@ export async function askQuestion(
 
   return deps.questionsRepo.createQuestion({
     conceptId: concept.id,
-    type: generated.type,
-    prompt: generated.prompt,
-    options: generated.type === "flashcard" ? generated.options : null,
-    correctOptionIndex: generated.type === "flashcard" ? generated.correctOptionIndex : null,
+    ...questionFieldsFromGenerated(generated),
   });
 }

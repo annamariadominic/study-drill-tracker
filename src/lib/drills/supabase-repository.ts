@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DrillsRepository } from "./repository";
+import type { CreateDrillInput, DrillsRepository } from "./repository";
 import type { Drill, DrillScope } from "./types";
 
 type DrillRow = {
@@ -23,11 +23,7 @@ function toDrill(row: DrillRow): Drill {
 export class SupabaseDrillsRepository implements DrillsRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async createDrill(input: {
-    domainId: string;
-    scope: DrillScope;
-    scopeDetail?: Record<string, unknown> | null;
-  }): Promise<Drill> {
+  async createDrill(input: CreateDrillInput): Promise<Drill> {
     const { data, error } = await this.client
       .from("drills")
       .insert({

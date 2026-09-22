@@ -1,15 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { DrillsRepository } from "./repository";
-import type { Drill, DrillScope } from "./types";
+import type { CreateDrillInput, DrillsRepository } from "./repository";
+import type { Drill } from "./types";
 
 export class FakeDrillsRepository implements DrillsRepository {
   private drills = new Map<string, Drill>();
 
-  async createDrill(input: {
-    domainId: string;
-    scope: DrillScope;
-    scopeDetail?: Record<string, unknown> | null;
-  }): Promise<Drill> {
+  async createDrill(input: CreateDrillInput): Promise<Drill> {
     const drill: Drill = {
       id: randomUUID(),
       domainId: input.domainId,

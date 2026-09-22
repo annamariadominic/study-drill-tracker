@@ -51,6 +51,7 @@ describe("startDueDrill", () => {
 
     expect(drill.domainId).toBe(domain.id);
     expect(drill.scope).toBe("due");
+    expect(drill.scopeDetail).toEqual({ dueAsOf: expect.any(String) });
     expect(await deps.drillsRepo.getDrill(drill.id)).toEqual(drill);
 
     const questions = await deps.questionsRepo.listDrillQuestions(drill.id);
@@ -128,12 +129,12 @@ describe("startDueDrill", () => {
       return { type: "recall", prompt: "Explain something." };
     });
     const createDrill = vi.spyOn(deps.drillsRepo, "createDrill");
-    const createQuestion = vi.spyOn(deps.questionsRepo, "createQuestion");
+    const createQuestions = vi.spyOn(deps.questionsRepo, "createQuestions");
 
     await expect(startDueDrill({ ...deps, llmPort }, { domainId: domain.id })).rejects.toThrow(
       DrillGenerationError,
     );
     expect(createDrill).not.toHaveBeenCalled();
-    expect(createQuestion).not.toHaveBeenCalled();
+    expect(createQuestions).not.toHaveBeenCalled();
   });
 });

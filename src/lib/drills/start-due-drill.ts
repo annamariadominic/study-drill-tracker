@@ -1,5 +1,7 @@
 import type { LlmPort } from "@/lib/llm/port";
+import { questionFieldsFromGenerated } from "@/lib/questions/from-generated";
 import type { QuestionsRepository } from "@/lib/questions/repository";
+import { scheduleFromFields } from "@/lib/study/scheduling";
 import { NotFoundError } from "@/lib/syllabus/errors";
 import { listDueConcepts } from "@/lib/syllabus/list-due-concepts";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
@@ -28,22 +30,19 @@ export async function startDueDrill(
     throw new NotFoundError("Domain", input.domainId);
   }
 
-  const due = (await listDueConcepts(deps.syllabusRepo, input.now)).filter(
-    (dueConcept) => dueConcept.domain.id === domain.id,
-  );
+  const dueAsOf = input.now ?? new Date();
+  const due = await listDueConcepts(deps.syllabusRepo, dueAsOf);
   const conceptsById = new Map(due.map((dueConcept) => [dueConcept.concept.id, dueConcept.concept]));
 
+  // Every due Concept is offered to composition carrying its own Domain, so
+  // the one-Domain rule (ADR 0001) is enforced where the Concepts are chosen.
   const plan = composeDueDrill({
     domainId: domain.id,
     maxQuestions: input.maxQuestions,
-    candidates: due.map(({ concept }) => ({
+    candidates: due.map(({ concept, domain: conceptDomain }) => ({
       conceptId: concept.id,
-      domainId: domain.id,
-      reviewIntervalDays: concept.reviewIntervalDays,
-      reviewEaseFactor: concept.reviewEaseFactor,
-      // A due Concept always has a next-due date; the fallback just keeps the
-      // ordering total.
-      dueAt: concept.nextReviewDueAt ?? concept.createdAt,
+      domainId: conceptDomain.id,
+      schedule: scheduleFromFields(concept),
     })),
   });
 
@@ -70,19 +69,21 @@ export async function startDueDrill(
     }),
   );
 
-  const drill = await deps.drillsRepo.createDrill({ domainId: domain.id, scope: "due" });
+  const drill = await deps.drillsRepo.createDrill({
+    domainId: domain.id,
+    scope: "due",
+    // When the due-list was taken; the Drill's Questions record the rest.
+    scopeDetail: { dueAsOf: dueAsOf.toISOString() },
+  });
 
-  for (const [position, { conceptId, content }] of generated.entries()) {
-    await deps.questionsRepo.createQuestion({
+  await deps.questionsRepo.createQuestions(
+    generated.map(({ conceptId, content }, position) => ({
       conceptId,
       drillId: drill.id,
       position,
-      type: content.type,
-      prompt: content.prompt,
-      options: content.type === "flashcard" ? content.options : null,
-      correctOptionIndex: content.type === "flashcard" ? content.correctOptionIndex : null,
-    });
-  }
+      ...questionFieldsFromGenerated(content),
+    })),
+  );
 
   return drill;
 }

@@ -27,6 +27,11 @@ export async function POST(
     return NextResponse.json({ error: "a valid confidence is required" }, { status: 400 });
   }
 
+  // An Attempt made inside a Drill returns to the Drill; a one-off Question
+  // returns to its own page.
+  const returnUrl = (query: string) =>
+    drillId ? `/study/drills/${drillId}?${query}` : `/study/questions/${questionId}?${query}`;
+
   const selectedOptionIndex =
     typeof optionIndexRaw === "string" && optionIndexRaw.length > 0
       ? Number.parseInt(optionIndexRaw, 10)
@@ -46,17 +51,15 @@ export async function POST(
         selectedOptionIndex,
       },
     );
-    const answered = drillId
-      ? `/study/drills/${drillId}?attemptId=${attempt.id}`
-      : `/study/questions/${questionId}?attemptId=${attempt.id}`;
-    return NextResponse.redirect(new URL(answered, request.url), { status: 303 });
+    return NextResponse.redirect(new URL(returnUrl(`attemptId=${attempt.id}`), request.url), {
+      status: 303,
+    });
   } catch (error) {
     if (error instanceof NotFoundError) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
-    const failed = drillId
-      ? `/study/drills/${drillId}?error=grading-failed`
-      : `/study/questions/${questionId}?error=grading-failed`;
-    return NextResponse.redirect(new URL(failed, request.url), { status: 303 });
+    return NextResponse.redirect(new URL(returnUrl("error=grading-failed"), request.url), {
+      status: 303,
+    });
   }
 }

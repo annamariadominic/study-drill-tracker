@@ -3,8 +3,8 @@ import { FakeLlmPort } from "@/lib/llm/fake-port";
 import { FakeQuestionsRepository } from "@/lib/questions/fake-repository";
 import { submitAttempt } from "@/lib/study/submit-attempt";
 import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
-import { drillProgress } from "./drill-progress";
 import { FakeDrillsRepository } from "./fake-repository";
+import { loadDrill } from "./load-drill";
 import { startDueDrill } from "./start-due-drill";
 
 describe("taking a Drill", () => {
@@ -29,11 +29,11 @@ describe("taking a Drill", () => {
     );
 
     const loadProgress = async () => {
-      const questions = await questionsRepo.listDrillQuestions(drill.id);
-      const attempts = await questionsRepo.listAttemptsForQuestions(
-        questions.map((question) => question.id),
-      );
-      return drillProgress(questions, attempts);
+      const loaded = await loadDrill({ drillsRepo, questionsRepo }, drill.id);
+      if (!loaded) {
+        throw new Error("the Drill just started should be loadable");
+      }
+      return loaded.progress;
     };
 
     const startedAt = Date.now();

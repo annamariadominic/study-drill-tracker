@@ -22,6 +22,14 @@ export class FakeQuestionsRepository implements QuestionsRepository {
     return question;
   }
 
+  async createQuestions(inputs: CreateQuestionInput[]): Promise<Question[]> {
+    const created: Question[] = [];
+    for (const input of inputs) {
+      created.push(await this.createQuestion(input));
+    }
+    return created;
+  }
+
   async getQuestion(id: string): Promise<Question | null> {
     return this.questions.get(id) ?? null;
   }

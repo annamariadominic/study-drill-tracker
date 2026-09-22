@@ -50,25 +50,42 @@ function toAttempt(row: AttemptRow): Attempt {
   };
 }
 
+function toQuestionRow(input: CreateQuestionInput) {
+  return {
+    concept_id: input.conceptId,
+    drill_id: input.drillId ?? null,
+    position: input.position ?? null,
+    type: input.type,
+    prompt: input.prompt,
+    options: input.options ?? null,
+    correct_option_index: input.correctOptionIndex ?? null,
+  };
+}
+
 export class SupabaseQuestionsRepository implements QuestionsRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async createQuestion(input: CreateQuestionInput): Promise<Question> {
     const { data, error } = await this.client
       .from("questions")
-      .insert({
-        concept_id: input.conceptId,
-        drill_id: input.drillId ?? null,
-        position: input.position ?? null,
-        type: input.type,
-        prompt: input.prompt,
-        options: input.options ?? null,
-        correct_option_index: input.correctOptionIndex ?? null,
-      })
+      .insert(toQuestionRow(input))
       .select()
       .single();
     if (error) throw error;
     return toQuestion(data as QuestionRow);
+  }
+
+  async createQuestions(inputs: CreateQuestionInput[]): Promise<Question[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+    // One multi-row insert, so a Drill's Questions are all written or none are.
+    const { data, error } = await this.client
+      .from("questions")
+      .insert(inputs.map(toQuestionRow))
+      .select();
+    if (error) throw error;
+    return (data as QuestionRow[]).map(toQuestion);
   }
 
   async getQuestion(id: string): Promise<Question | null> {

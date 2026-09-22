@@ -1,25 +1,34 @@
 import { describe, expect, it } from "vitest";
+import type { ReviewScheduleState } from "@/lib/study/scheduling";
 import { DEFAULT_MAX_QUESTIONS, composeDueDrill, conceptStrength } from "./compose-drill";
 import type { DrillCandidate } from "./compose-drill";
+
+const DUE_AT = "2026-01-01T00:00:00.000Z";
+
+function schedule(
+  intervalDays: number,
+  easeFactor: number,
+  nextDueAt: string = DUE_AT,
+): ReviewScheduleState {
+  return { intervalDays, easeFactor, nextDueAt };
+}
 
 function candidate(overrides: Partial<DrillCandidate> & { conceptId: string }): DrillCandidate {
   return {
     domainId: "domain-1",
-    reviewIntervalDays: 10,
-    reviewEaseFactor: 2.5,
-    dueAt: "2026-01-01T00:00:00.000Z",
+    schedule: schedule(10, 2.5),
     ...overrides,
   };
 }
 
-const newlyStudied = { reviewIntervalDays: 1, reviewEaseFactor: 2.5 };
-const struggling = { reviewIntervalDays: 1, reviewEaseFactor: 1.9 };
-const developing = { reviewIntervalDays: 6, reviewEaseFactor: 2.6 };
-const strong = { reviewIntervalDays: 40, reviewEaseFactor: 2.8 };
+const newlyStudied = schedule(1, 2.5);
+const struggling = schedule(1, 1.9);
+const developing = schedule(6, 2.6);
+const strong = schedule(40, 2.8);
 
 describe("conceptStrength", () => {
   it("treats a Concept with no review schedule as weak", () => {
-    expect(conceptStrength({ reviewIntervalDays: null, reviewEaseFactor: null })).toBe("weak");
+    expect(conceptStrength(null)).toBe("weak");
   });
 
   it("treats a newly-studied Concept as weak", () => {
@@ -43,7 +52,7 @@ describe("composeDueDrill", () => {
   it("gives weak Concepts both a recall and a flashcard Question", () => {
     const questions = composeDueDrill({
       domainId: "domain-1",
-      candidates: [candidate({ conceptId: "weak-1", ...newlyStudied })],
+      candidates: [candidate({ conceptId: "weak-1", schedule: newlyStudied })],
     });
 
     expect(questions).toEqual([
@@ -56,8 +65,8 @@ describe("composeDueDrill", () => {
     const questions = composeDueDrill({
       domainId: "domain-1",
       candidates: [
-        candidate({ conceptId: "developing-1", ...developing }),
-        candidate({ conceptId: "strong-1", ...strong }),
+        candidate({ conceptId: "developing-1", schedule: developing }),
+        candidate({ conceptId: "strong-1", schedule: strong }),
       ],
     });
 
@@ -71,9 +80,9 @@ describe("composeDueDrill", () => {
     const questions = composeDueDrill({
       domainId: "domain-1",
       candidates: [
-        candidate({ conceptId: "strong-1", ...strong }),
-        candidate({ conceptId: "developing-1", ...developing }),
-        candidate({ conceptId: "weak-1", ...newlyStudied }),
+        candidate({ conceptId: "strong-1", schedule: strong }),
+        candidate({ conceptId: "developing-1", schedule: developing }),
+        candidate({ conceptId: "weak-1", schedule: newlyStudied }),
       ],
     });
 
@@ -89,8 +98,8 @@ describe("composeDueDrill", () => {
     const questions = composeDueDrill({
       domainId: "domain-1",
       candidates: [
-        candidate({ conceptId: "other-domain", domainId: "domain-2", ...newlyStudied }),
-        candidate({ conceptId: "in-domain", ...developing }),
+        candidate({ conceptId: "other-domain", domainId: "domain-2", schedule: newlyStudied }),
+        candidate({ conceptId: "in-domain", schedule: developing }),
       ],
     });
 
@@ -99,7 +108,7 @@ describe("composeDueDrill", () => {
 
   it("caps the Drill at the maximum number of Questions", () => {
     const candidates = Array.from({ length: 20 }, (_, index) =>
-      candidate({ conceptId: `concept-${index}`, ...newlyStudied }),
+      candidate({ conceptId: `concept-${index}`, schedule: newlyStudied }),
     );
 
     const questions = composeDueDrill({ domainId: "domain-1", candidates });
@@ -109,8 +118,8 @@ describe("composeDueDrill", () => {
 
   it("honours an explicit cap and never splits a Concept's Questions across it", () => {
     const candidates = [
-      candidate({ conceptId: "weak-1", ...newlyStudied }),
-      candidate({ conceptId: "weak-2", ...newlyStudied }),
+      candidate({ conceptId: "weak-1", schedule: newlyStudied }),
+      candidate({ conceptId: "weak-2", schedule: newlyStudied }),
     ];
 
     const questions = composeDueDrill({ domainId: "domain-1", candidates, maxQuestions: 3 });
@@ -125,8 +134,8 @@ describe("composeDueDrill", () => {
     const questions = composeDueDrill({
       domainId: "domain-1",
       candidates: [
-        candidate({ conceptId: "later", ...developing, dueAt: "2026-01-02T00:00:00.000Z" }),
-        candidate({ conceptId: "earlier", ...developing, dueAt: "2026-01-01T00:00:00.000Z" }),
+        candidate({ conceptId: "later", schedule: schedule(6, 2.6, "2026-01-02T00:00:00.000Z") }),
+        candidate({ conceptId: "earlier", schedule: schedule(6, 2.6, "2026-01-01T00:00:00.000Z") }),
       ],
     });
 

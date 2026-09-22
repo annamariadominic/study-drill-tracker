@@ -1,4 +1,5 @@
 import type { QuestionType } from "@/lib/questions/types";
+import { EASE_DEFAULT, type ReviewScheduleState } from "@/lib/study/scheduling";
 
 /**
  * How well a Concept is holding up, read off its review schedule: the interval
@@ -8,10 +9,10 @@ export type ConceptStrength = "weak" | "developing" | "strong";
 
 export type DrillCandidate = {
   conceptId: string;
+  /** The Domain the Concept's Subject belongs to. */
   domainId: string;
-  reviewIntervalDays: number | null;
-  reviewEaseFactor: number | null;
-  dueAt: string;
+  /** null for a Concept that has never been scheduled. */
+  schedule: ReviewScheduleState | null;
 };
 
 export type ComposedQuestion = {
@@ -21,8 +22,6 @@ export type ComposedQuestion = {
 
 export const DEFAULT_MAX_QUESTIONS = 10;
 
-/** Below this ease factor a Concept has been got wrong more often than not. */
-const SHAKY_EASE_FACTOR = 2.5;
 /** At or above this interval a Concept has survived several successful reviews. */
 const STRONG_INTERVAL_DAYS = 21;
 
@@ -39,21 +38,24 @@ const QUESTION_TYPES_BY_STRENGTH: Record<ConceptStrength, QuestionType[]> = {
 
 const STRENGTH_ORDER: ConceptStrength[] = ["weak", "developing", "strong"];
 
-export function conceptStrength(concept: {
-  reviewIntervalDays: number | null;
-  reviewEaseFactor: number | null;
-}): ConceptStrength {
-  const { reviewIntervalDays, reviewEaseFactor } = concept;
-  if (reviewIntervalDays === null || reviewEaseFactor === null) {
+export function conceptStrength(schedule: ReviewScheduleState | null): ConceptStrength {
+  if (schedule === null) {
     return "weak";
   }
-  if (reviewIntervalDays <= 1 || reviewEaseFactor < SHAKY_EASE_FACTOR) {
+  // An ease factor below where it started means Attempts have been going wrong
+  // or being guessed (ADR 0002).
+  if (schedule.intervalDays <= 1 || schedule.easeFactor < EASE_DEFAULT) {
     return "weak";
   }
-  if (reviewIntervalDays < STRONG_INTERVAL_DAYS) {
+  if (schedule.intervalDays < STRONG_INTERVAL_DAYS) {
     return "developing";
   }
   return "strong";
+}
+
+/** An unscheduled Concept has been waiting longest, so it sorts first. */
+function dueTime(candidate: DrillCandidate): number {
+  return candidate.schedule ? Date.parse(candidate.schedule.nextDueAt) : 0;
 }
 
 /**
@@ -73,14 +75,14 @@ export function composeDueDrill(input: {
 
   const ranked = input.candidates
     .filter((candidate) => candidate.domainId === input.domainId)
-    .map((candidate) => ({ candidate, strength: conceptStrength(candidate) }))
+    .map((candidate) => ({ candidate, strength: conceptStrength(candidate.schedule) }))
     .sort((a, b) => {
       const byStrength =
         STRENGTH_ORDER.indexOf(a.strength) - STRENGTH_ORDER.indexOf(b.strength);
       if (byStrength !== 0) {
         return byStrength;
       }
-      const byDueAt = Date.parse(a.candidate.dueAt) - Date.parse(b.candidate.dueAt);
+      const byDueAt = dueTime(a.candidate) - dueTime(b.candidate);
       if (byDueAt !== 0) {
         return byDueAt;
       }

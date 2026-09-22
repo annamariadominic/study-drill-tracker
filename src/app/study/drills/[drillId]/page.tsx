@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { drillProgress } from "@/lib/drills/drill-progress";
 import { getDrillsRepository } from "@/lib/drills/get-repository";
+import { drillConceptNames, loadDrill } from "@/lib/drills/load-drill";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
@@ -15,19 +15,14 @@ export default async function DrillPage({
   const { drillId } = await params;
   const { attemptId, error } = await searchParams;
 
-  const drillsRepo = getDrillsRepository();
-  const questionsRepo = getQuestionsRepository();
-
-  const drill = await drillsRepo.getDrill(drillId);
-  if (!drill) {
+  const loaded = await loadDrill(
+    { drillsRepo: getDrillsRepository(), questionsRepo: getQuestionsRepository() },
+    drillId,
+  );
+  if (!loaded) {
     notFound();
   }
-
-  const questions = await questionsRepo.listDrillQuestions(drill.id);
-  const attempts = await questionsRepo.listAttemptsForQuestions(
-    questions.map((question) => question.id),
-  );
-  const progress = drillProgress(questions, attempts);
+  const { drill, progress } = loaded;
 
   const justAnswered = attemptId
     ? progress.steps.find((step) => step.attempt?.id === attemptId)
@@ -127,16 +122,9 @@ export default async function DrillPage({
     );
   }
 
-  const syllabusRepo = getSyllabusRepository();
-  const conceptNames = new Map(
-    await Promise.all(
-      [...new Set(questions.map((question) => question.conceptId))].map(
-        async (conceptId): Promise<[string, string]> => {
-          const concept = await syllabusRepo.getConcept(conceptId);
-          return [conceptId, concept?.name ?? "Unknown Concept"];
-        },
-      ),
-    ),
+  const conceptNames = await drillConceptNames(
+    getSyllabusRepository(),
+    progress.steps.map((step) => step.question),
   );
 
   return (

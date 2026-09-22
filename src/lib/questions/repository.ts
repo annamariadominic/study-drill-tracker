@@ -12,6 +12,8 @@ export type CreateQuestionInput = {
 
 export interface QuestionsRepository {
   createQuestion(input: CreateQuestionInput): Promise<Question>;
+  /** Creates several Questions as one unit, so a Drill's Questions land together. */
+  createQuestions(inputs: CreateQuestionInput[]): Promise<Question[]>;
   getQuestion(id: string): Promise<Question | null>;
   /** Questions of one Drill, in the order they should be asked. */
   listDrillQuestions(drillId: string): Promise<Question[]>;

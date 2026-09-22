@@ -8,7 +8,7 @@ export type ReviewScheduleState = {
 
 const EASE_MIN = 1.3;
 const EASE_MAX = 3.2;
-const EASE_DEFAULT = 2.5;
+export const EASE_DEFAULT = 2.5;
 
 const CORRECTNESS_EASE_DELTA: Record<Correctness, number> = {
   correct: 0.15,
