@@ -312,4 +312,66 @@ describe("submitAttempt", () => {
 
     expect(afterSecond?.reviewIntervalDays).toBeGreaterThan(afterFirst?.reviewIntervalDays ?? 0);
   });
+
+  it("waits for the recall Attempt to advance the schedule, even when a flashcard on the same Concept is answered first", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+
+    const flashcard = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 0,
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+    const recall = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 1,
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
+    );
+    const afterFlashcard = await syllabusRepo.getConcept(concept.id);
+    expect(afterFlashcard?.reviewIntervalDays).toBe(1);
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: recall.id, confidence: "confident", submittedAnswer: "No extra effect." },
+    );
+
+    expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
+  });
+
+  it("lets a flashcard provide the one scheduling update when the Drill asks nothing else about that Concept", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+
+    const flashcard = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 0,
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
+    );
+
+    expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
+  });
 });
