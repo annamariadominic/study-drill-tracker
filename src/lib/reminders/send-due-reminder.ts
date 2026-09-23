@@ -11,7 +11,7 @@ function reminderEmail(dueCount: number, dueListUrl: string, now: Date): Email {
   const due = dueCount === 1 ? "1 Concept" : `${dueCount} Concepts`;
   return {
     subject: `${due} due for review`,
-    text: `You have ${due} due for review.\n\nStart a Drill: ${dueListUrl}\n`,
+    text: `You have ${due} due for review.\n\nSee what's due: ${dueListUrl}\n`,
     idempotencyKey: `due-reminder/${now.toISOString().slice(0, 10)}`,
   };
 }

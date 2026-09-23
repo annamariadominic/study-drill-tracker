@@ -25,6 +25,7 @@ describe("proxy", () => {
     expect(unstable_doesMiddlewareMatch({ config, url: "/study/due" })).toBe(true);
     expect(unstable_doesMiddlewareMatch({ config, url: "/api/drills" })).toBe(true);
     expect(unstable_doesMiddlewareMatch({ config, url: "/api/cronjobs" })).toBe(true);
+    expect(unstable_doesMiddlewareMatch({ config, url: "/api/cron/other" })).toBe(true);
   });
 
   it("does not let CRON_SECRET stand in for a session", async () => {
