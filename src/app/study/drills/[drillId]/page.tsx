@@ -3,7 +3,39 @@ import { notFound } from "next/navigation";
 import { getDrillsRepository } from "@/lib/drills/get-repository";
 import { drillConceptNames, loadDrill } from "@/lib/drills/load-drill";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
+import type { Question } from "@/lib/questions/types";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
+
+/** The names of the Concepts a Question asks about, in the order it presents them. */
+function conceptList(question: Question, conceptNames: Map<string, string>, separator: string) {
+  return question.conceptIds.map((conceptId) => conceptNames.get(conceptId)).join(separator);
+}
+
+/**
+ * Marks a scenario Question as testing several Concepts at once, naming them.
+ * Other Questions ask about one Concept and get no label.
+ */
+async function ScenarioLabel({ question }: { question: Question }) {
+  if (question.type !== "scenario") {
+    return null;
+  }
+  const conceptNames = await drillConceptNames(getSyllabusRepository(), [question]);
+  return (
+    <p
+      style={{
+        display: "inline-block",
+        margin: 0,
+        padding: "0.25rem 0.5rem",
+        border: "1px solid #7a5cc2",
+        borderRadius: 4,
+        color: "#7a5cc2",
+      }}
+    >
+      Scenario · combines {question.conceptIds.length} Concepts:{" "}
+      {conceptList(question, conceptNames, ", ")}
+    </p>
+  );
+}
 
 export default async function DrillPage({
   params,
@@ -45,6 +77,7 @@ export default async function DrillPage({
     return (
       <main style={{ maxWidth: 560, margin: "4rem auto", padding: "0 1rem" }}>
         {heading}
+        <ScenarioLabel question={justAnswered.question} />
         <h2>{justAnswered.question.prompt}</h2>
         <p>
           <strong>Your answer:</strong> {attempt.submittedAnswer}
@@ -70,6 +103,7 @@ export default async function DrillPage({
     return (
       <main style={{ maxWidth: 560, margin: "4rem auto", padding: "0 1rem" }}>
         {heading}
+        <ScenarioLabel question={question} />
         <h2>{question.prompt}</h2>
 
         <form
@@ -139,9 +173,7 @@ export default async function DrillPage({
       <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {progress.steps.map((step) => (
           <li key={step.question.id} style={{ border: "1px solid #ccc", padding: "0.5rem" }}>
-            <strong>
-              {step.question.conceptIds.map((conceptId) => conceptNames.get(conceptId)).join(" + ")}
-            </strong>{" "}
+            <strong>{conceptList(step.question, conceptNames, " + ")}</strong>{" "}
             <span style={{ color: "#666" }}>({step.question.type})</span>
             <p style={{ margin: "0.25rem 0" }}>{step.attempt?.correctness ?? "unanswered"}</p>
           </li>
