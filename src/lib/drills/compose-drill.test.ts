@@ -3,7 +3,7 @@ import type { ReviewScheduleState } from "@/lib/study/scheduling";
 import {
   DEFAULT_MAX_QUESTIONS,
   MAX_SCENARIO_CONCEPTS,
-  composeDueDrill,
+  composeDrill,
   conceptStrength,
 } from "./compose-drill";
 import type { ComposedQuestion, DrillCandidate } from "./compose-drill";
@@ -59,9 +59,9 @@ describe("conceptStrength", () => {
   });
 });
 
-describe("composeDueDrill", () => {
+describe("composeDrill", () => {
   it("gives weak Concepts both a recall and a flashcard Question", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [candidate({ conceptId: "weak-1", schedule: newlyStudied })],
     });
@@ -73,7 +73,7 @@ describe("composeDueDrill", () => {
   });
 
   it("gives a developing Concept a single recall Question and a strong one a single flashcard", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "developing-1", schedule: developing }),
@@ -88,7 +88,7 @@ describe("composeDueDrill", () => {
   });
 
   it("weights weaker Concepts more heavily than stronger ones", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "strong-1", schedule: strong }),
@@ -106,7 +106,7 @@ describe("composeDueDrill", () => {
   });
 
   it("never selects Concepts from another Domain", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "other-domain", domainId: "domain-2", schedule: newlyStudied }),
@@ -122,7 +122,7 @@ describe("composeDueDrill", () => {
       candidate({ conceptId: `concept-${index}`, schedule: newlyStudied }),
     );
 
-    const questions = composeDueDrill({ domainId: "domain-1", candidates });
+    const questions = composeDrill({ domainId: "domain-1", candidates });
 
     expect(questions.length).toBeLessThanOrEqual(DEFAULT_MAX_QUESTIONS);
     expect(questions.length).toBeGreaterThanOrEqual(DEFAULT_MAX_QUESTIONS - 1);
@@ -135,7 +135,7 @@ describe("composeDueDrill", () => {
       candidate({ conceptId: "weak-2", schedule: newlyStudied }),
     ];
 
-    const questions = composeDueDrill({ domainId: "domain-1", candidates, maxQuestions: 3 });
+    const questions = composeDrill({ domainId: "domain-1", candidates, maxQuestions: 3 });
 
     expect(questions).toEqual([
       { conceptIds: ["weak-1"], type: "recall" },
@@ -145,7 +145,7 @@ describe("composeDueDrill", () => {
   });
 
   it("orders equally-weak Concepts by how long they have been due", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "later", schedule: schedule(6, 2.6, "2026-01-02T00:00:00.000Z") }),
@@ -160,13 +160,13 @@ describe("composeDueDrill", () => {
   });
 
   it("returns no Questions when nothing in the Domain is due", () => {
-    expect(composeDueDrill({ domainId: "domain-1", candidates: [] })).toEqual([]);
+    expect(composeDrill({ domainId: "domain-1", candidates: [] })).toEqual([]);
   });
 });
 
-describe("composeDueDrill scenario Questions", () => {
+describe("composeDrill scenario Questions", () => {
   it("combines Concepts from different Subjects of the Drill's Domain into one scenario", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "queues", subjectId: "system-design", schedule: developing }),
@@ -180,7 +180,7 @@ describe("composeDueDrill scenario Questions", () => {
   });
 
   it("never combines Concepts from different Domains, however they rank", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "subjunctive", domainId: "domain-2", subjectId: "spanish", schedule: null }),
@@ -199,7 +199,7 @@ describe("composeDueDrill scenario Questions", () => {
   });
 
   it("offers no scenario when only one Concept in the Domain is due", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "other-domain", domainId: "domain-2", schedule: newlyStudied }),
@@ -211,7 +211,7 @@ describe("composeDueDrill scenario Questions", () => {
   });
 
   it("includes a newly-studied Concept that has never been attempted", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "never-attempted", schedule: null }),
@@ -227,7 +227,7 @@ describe("composeDueDrill scenario Questions", () => {
       candidate({ conceptId: `concept-${index}`, subjectId: `subject-${index % 2}`, schedule: strong }),
     );
 
-    const questions = composeDueDrill({ domainId: "domain-1", candidates });
+    const questions = composeDrill({ domainId: "domain-1", candidates });
 
     expect(scenarios(questions)).toHaveLength(1);
     expect(questions.at(-1)?.type).toBe("scenario");
@@ -235,7 +235,7 @@ describe("composeDueDrill scenario Questions", () => {
   });
 
   it("reaches for another Subject rather than filling the scenario from the weakest Subject alone", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       candidates: [
         candidate({ conceptId: "weak-a1", subjectId: "subject-a", schedule: newlyStudied }),
@@ -249,7 +249,7 @@ describe("composeDueDrill scenario Questions", () => {
   });
 
   it("gives up the scenario rather than let it crowd out every recall and flashcard Question", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       maxQuestions: 2,
       candidates: [
@@ -265,7 +265,7 @@ describe("composeDueDrill scenario Questions", () => {
   });
 
   it("leaves the scenario out of a single-Question Drill", () => {
-    const questions = composeDueDrill({
+    const questions = composeDrill({
       domainId: "domain-1",
       maxQuestions: 1,
       candidates: [
