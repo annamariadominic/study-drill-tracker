@@ -33,7 +33,7 @@ export async function drillConceptNames(
   syllabusRepo: SyllabusRepository,
   questions: Question[],
 ): Promise<Map<string, string>> {
-  const conceptIds = [...new Set(questions.map((question) => question.conceptId))];
+  const conceptIds = [...new Set(questions.flatMap((question) => question.conceptIds))];
   const named = await Promise.all(
     conceptIds.map(async (conceptId): Promise<[string, string]> => {
       const concept = await syllabusRepo.getConcept(conceptId);

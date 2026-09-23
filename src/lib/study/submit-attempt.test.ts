@@ -19,7 +19,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -42,7 +42,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -67,7 +67,7 @@ describe("submitAttempt", () => {
     }));
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "recall",
       prompt: "Explain idempotency.",
     });
@@ -88,7 +88,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -124,7 +124,7 @@ describe("submitAttempt", () => {
     });
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "recall",
       prompt: "Explain idempotency.",
     });
@@ -143,7 +143,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -166,7 +166,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -188,7 +188,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["Correct one", "Wrong one"],
@@ -214,14 +214,14 @@ describe("submitAttempt", () => {
     const concept = await buildStudiedConcept(syllabusRepo);
 
     const recall = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 0,
       type: "recall",
       prompt: "Explain idempotency.",
     });
     const flashcard = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 1,
       type: "flashcard",
@@ -254,14 +254,14 @@ describe("submitAttempt", () => {
     const concept = await buildStudiedConcept(syllabusRepo);
 
     const first = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 0,
       type: "recall",
       prompt: "Explain idempotency.",
     });
     const second = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 1,
       type: "recall",
@@ -288,12 +288,12 @@ describe("submitAttempt", () => {
     const concept = await buildStudiedConcept(syllabusRepo);
 
     const first = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "recall",
       prompt: "Explain idempotency.",
     });
     const second = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       type: "recall",
       prompt: "Explain idempotency again.",
     });
@@ -320,7 +320,7 @@ describe("submitAttempt", () => {
     const concept = await buildStudiedConcept(syllabusRepo);
 
     const flashcard = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 0,
       type: "flashcard",
@@ -329,7 +329,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
     const recall = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 1,
       type: "recall",
@@ -358,7 +358,7 @@ describe("submitAttempt", () => {
     const concept = await buildStudiedConcept(syllabusRepo);
 
     const flashcard = await questionsRepo.createQuestion({
-      conceptId: concept.id,
+      conceptIds: [concept.id],
       drillId: "drill-1",
       position: 0,
       type: "flashcard",

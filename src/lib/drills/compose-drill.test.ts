@@ -56,8 +56,8 @@ describe("composeDueDrill", () => {
     });
 
     expect(questions).toEqual([
-      { conceptId: "weak-1", type: "recall" },
-      { conceptId: "weak-1", type: "flashcard" },
+      { conceptIds: ["weak-1"], type: "recall" },
+      { conceptIds: ["weak-1"], type: "flashcard" },
     ]);
   });
 
@@ -71,8 +71,8 @@ describe("composeDueDrill", () => {
     });
 
     expect(questions).toEqual([
-      { conceptId: "developing-1", type: "recall" },
-      { conceptId: "strong-1", type: "flashcard" },
+      { conceptIds: ["developing-1"], type: "recall" },
+      { conceptIds: ["strong-1"], type: "flashcard" },
     ]);
   });
 
@@ -87,11 +87,11 @@ describe("composeDueDrill", () => {
     });
 
     const countFor = (conceptId: string) =>
-      questions.filter((question) => question.conceptId === conceptId).length;
+      questions.filter((question) => question.conceptIds[0] === conceptId).length;
 
     expect(countFor("weak-1")).toBeGreaterThan(countFor("developing-1"));
     expect(countFor("developing-1")).toBeGreaterThanOrEqual(countFor("strong-1"));
-    expect(questions[0].conceptId).toBe("weak-1");
+    expect(questions[0].conceptIds).toEqual(["weak-1"]);
   });
 
   it("never selects Concepts from another Domain", () => {
@@ -103,7 +103,7 @@ describe("composeDueDrill", () => {
       ],
     });
 
-    expect(questions.map((question) => question.conceptId)).toEqual(["in-domain"]);
+    expect(questions.map((question) => question.conceptIds[0])).toEqual(["in-domain"]);
   });
 
   it("caps the Drill at the maximum number of Questions", () => {
@@ -125,8 +125,8 @@ describe("composeDueDrill", () => {
     const questions = composeDueDrill({ domainId: "domain-1", candidates, maxQuestions: 3 });
 
     expect(questions).toEqual([
-      { conceptId: "weak-1", type: "recall" },
-      { conceptId: "weak-1", type: "flashcard" },
+      { conceptIds: ["weak-1"], type: "recall" },
+      { conceptIds: ["weak-1"], type: "flashcard" },
     ]);
   });
 
@@ -139,7 +139,7 @@ describe("composeDueDrill", () => {
       ],
     });
 
-    expect(questions.map((question) => question.conceptId)).toEqual(["earlier", "later"]);
+    expect(questions.map((question) => question.conceptIds[0])).toEqual(["earlier", "later"]);
   });
 
   it("returns no Questions when nothing in the Domain is due", () => {

@@ -25,8 +25,9 @@ async function advancesReviewSchedule(
     return true;
   }
 
+  const [conceptId] = question.conceptIds;
   const aboutSameConcept = (await questionsRepo.listDrillQuestions(question.drillId)).filter(
-    (drillQuestion) => drillQuestion.conceptId === question.conceptId,
+    (drillQuestion) => drillQuestion.conceptIds.includes(conceptId),
   );
   const recallQuestions = aboutSameConcept.filter(
     (drillQuestion) => drillQuestion.type === "recall",
@@ -100,7 +101,7 @@ export async function submitAttempt(
     gradedExplanation,
   });
 
-  const concept = await deps.syllabusRepo.getConcept(question.conceptId);
+  const concept = await deps.syllabusRepo.getConcept(question.conceptIds[0]);
   if (concept && concept.status === "studied" && advancesSchedule) {
     const currentSchedule = scheduleFromFields(concept) ?? initialReviewSchedule();
     const nextSchedule = scheduleNextReview(currentSchedule, { correctness, confidence: input.confidence });

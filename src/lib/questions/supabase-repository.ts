@@ -1,10 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertQuestionConcepts } from "./concepts";
 import type { CreateQuestionInput, QuestionsRepository } from "./repository";
 import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
 
 type QuestionRow = {
   id: string;
-  concept_id: string;
   drill_id: string | null;
   position: number | null;
   type: QuestionType;
@@ -13,6 +13,13 @@ type QuestionRow = {
   correct_option_index: number | null;
   created_at: string;
 };
+
+type QuestionConceptRow = { concept_id: string; position: number };
+
+/** A Question row read back with its Concept links embedded. */
+type QuestionWithConceptsRow = QuestionRow & { question_concepts: QuestionConceptRow[] };
+
+const QUESTION_WITH_CONCEPTS = "*, question_concepts(concept_id, position)";
 
 type AttemptRow = {
   id: string;
@@ -24,10 +31,10 @@ type AttemptRow = {
   created_at: string;
 };
 
-function toQuestion(row: QuestionRow): Question {
+function toQuestion(row: QuestionRow, conceptIds: string[]): Question {
   return {
     id: row.id,
-    conceptId: row.concept_id,
+    conceptIds,
     drillId: row.drill_id,
     position: row.position,
     type: row.type,
@@ -36,6 +43,18 @@ function toQuestion(row: QuestionRow): Question {
     correctOptionIndex: row.correct_option_index,
     createdAt: row.created_at,
   };
+}
+
+/**
+ * Rejects a Question whose Concept links no longer fit its type, rather than
+ * handing a malformed Question to the rest of the app.
+ */
+function toQuestionWithConcepts(row: QuestionWithConceptsRow): Question {
+  const conceptIds = [...row.question_concepts]
+    .sort((a, b) => a.position - b.position)
+    .map((link) => link.concept_id);
+  assertQuestionConcepts({ id: row.id, type: row.type, conceptIds });
+  return toQuestion(row, conceptIds);
 }
 
 function toAttempt(row: AttemptRow): Attempt {
@@ -50,9 +69,10 @@ function toAttempt(row: AttemptRow): Attempt {
   };
 }
 
-function toQuestionRow(input: CreateQuestionInput) {
+/** The shape the create_questions database function takes for each Question. */
+function toCreateQuestionsArg(input: CreateQuestionInput) {
   return {
-    concept_id: input.conceptId,
+    concept_ids: input.conceptIds,
     drill_id: input.drillId ?? null,
     position: input.position ?? null,
     type: input.type,
@@ -66,46 +86,43 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
   constructor(private readonly client: SupabaseClient) {}
 
   async createQuestion(input: CreateQuestionInput): Promise<Question> {
-    const { data, error } = await this.client
-      .from("questions")
-      .insert(toQuestionRow(input))
-      .select()
-      .single();
-    if (error) throw error;
-    return toQuestion(data as QuestionRow);
+    const [question] = await this.createQuestions([input]);
+    return question;
   }
 
   async createQuestions(inputs: CreateQuestionInput[]): Promise<Question[]> {
     if (inputs.length === 0) {
       return [];
     }
-    // One multi-row insert, so a Drill's Questions are all written or none are.
-    const { data, error } = await this.client
-      .from("questions")
-      .insert(inputs.map(toQuestionRow))
-      .select();
+    inputs.forEach(assertQuestionConcepts);
+    // One database function call inserts the Questions and their Concept links
+    // in a single transaction, so a Drill's Questions are all written or none are.
+    const { data, error } = await this.client.rpc("create_questions", {
+      questions: inputs.map(toCreateQuestionsArg),
+    });
     if (error) throw error;
-    return (data as QuestionRow[]).map(toQuestion);
+    // Rows come back in input order, so each lines up with the Concepts it was given.
+    return (data as QuestionRow[]).map((row, index) => toQuestion(row, [...inputs[index].conceptIds]));
   }
 
   async getQuestion(id: string): Promise<Question | null> {
     const { data, error } = await this.client
       .from("questions")
-      .select("*")
+      .select(QUESTION_WITH_CONCEPTS)
       .eq("id", id)
       .maybeSingle();
     if (error) throw error;
-    return data ? toQuestion(data as QuestionRow) : null;
+    return data ? toQuestionWithConcepts(data as QuestionWithConceptsRow) : null;
   }
 
   async listDrillQuestions(drillId: string): Promise<Question[]> {
     const { data, error } = await this.client
       .from("questions")
-      .select("*")
+      .select(QUESTION_WITH_CONCEPTS)
       .eq("drill_id", drillId)
       .order("position", { ascending: true });
     if (error) throw error;
-    return (data as QuestionRow[]).map(toQuestion);
+    return (data as QuestionWithConceptsRow[]).map(toQuestionWithConcepts);
   }
 
   async createAttempt(input: {

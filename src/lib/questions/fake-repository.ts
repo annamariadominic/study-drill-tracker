@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertQuestionConcepts } from "./concepts";
 import type { CreateQuestionInput, QuestionsRepository } from "./repository";
 import type { Attempt, Confidence, Correctness, Question } from "./types";
 
@@ -7,9 +8,10 @@ export class FakeQuestionsRepository implements QuestionsRepository {
   private attempts = new Map<string, Attempt>();
 
   async createQuestion(input: CreateQuestionInput): Promise<Question> {
+    assertQuestionConcepts(input);
     const question: Question = {
       id: randomUUID(),
-      conceptId: input.conceptId,
+      conceptIds: [...input.conceptIds],
       drillId: input.drillId ?? null,
       position: input.position ?? null,
       type: input.type,
@@ -23,6 +25,8 @@ export class FakeQuestionsRepository implements QuestionsRepository {
   }
 
   async createQuestions(inputs: CreateQuestionInput[]): Promise<Question[]> {
+    // Checked up front, so a bad Question leaves none of the batch behind.
+    inputs.forEach(assertQuestionConcepts);
     const created: Question[] = [];
     for (const input of inputs) {
       created.push(await this.createQuestion(input));

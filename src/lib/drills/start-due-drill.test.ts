@@ -55,10 +55,10 @@ describe("startDueDrill", () => {
     expect(await deps.drillsRepo.getDrill(drill.id)).toEqual(drill);
 
     const questions = await deps.questionsRepo.listDrillQuestions(drill.id);
-    expect(questions.map((question) => [question.conceptId, question.type])).toEqual([
-      [weak.id, "recall"],
-      [weak.id, "flashcard"],
-      [strong.id, "flashcard"],
+    expect(questions.map((question) => [question.conceptIds, question.type])).toEqual([
+      [[weak.id], "recall"],
+      [[weak.id], "flashcard"],
+      [[strong.id], "flashcard"],
     ]);
     expect(questions.map((question) => question.position)).toEqual([0, 1, 2]);
     expect(questions[0].prompt).toContain("Idempotency");
@@ -78,7 +78,7 @@ describe("startDueDrill", () => {
     const drill = await startDueDrill(deps, { domainId: domain.id });
 
     const questions = await deps.questionsRepo.listDrillQuestions(drill.id);
-    expect(new Set(questions.map((question) => question.conceptId))).toEqual(new Set([inDomain.id]));
+    expect(new Set(questions.flatMap((question) => question.conceptIds))).toEqual(new Set([inDomain.id]));
   });
 
   it("caps the Drill at the maximum number of Questions", async () => {

@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLlmPort } from "@/lib/llm/get-port";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
-import type { QuestionType } from "@/lib/questions/types";
+import type { SingleConceptQuestionType } from "@/lib/questions/types";
 import { askQuestion } from "@/lib/study/ask-question";
 import { ConceptNotStudiedError } from "@/lib/study/errors";
 import { NotFoundError } from "@/lib/syllabus/errors";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
-const VALID_TYPES: QuestionType[] = ["recall", "flashcard"];
+const VALID_TYPES: SingleConceptQuestionType[] = ["recall", "flashcard"];
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const conceptId = formData.get("conceptId");
   const type = formData.get("type");
 
-  if (typeof conceptId !== "string" || typeof type !== "string" || !VALID_TYPES.includes(type as QuestionType)) {
+  if (typeof conceptId !== "string" || typeof type !== "string" || !VALID_TYPES.includes(type as SingleConceptQuestionType)) {
     return NextResponse.json({ error: "conceptId and a valid type are required" }, { status: 400 });
   }
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
         questionsRepo: getQuestionsRepository(),
         llmPort: getLlmPort(),
       },
-      { conceptId, type: type as QuestionType },
+      { conceptId, type: type as SingleConceptQuestionType },
     );
     return NextResponse.redirect(new URL(`/study/questions/${question.id}`, request.url), {
       status: 303,

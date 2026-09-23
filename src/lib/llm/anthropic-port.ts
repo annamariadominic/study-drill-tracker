@@ -1,11 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { GeneratedQuestion, GradedAnswer, LlmPort } from "./port";
+import type { QuestionType } from "@/lib/questions/types";
+import type { GeneratedQuestion, GradedAnswer, LlmPort, QuestionConcept } from "./port";
 
 const MODEL = "claude-opus-5";
 
-const RecallQuestionSchema = z.object({
+const PromptOnlySchema = z.object({
   prompt: z.string(),
 });
 
@@ -25,28 +26,46 @@ const GradedAnswerSchema = z.object({
   explanation: z.string(),
 });
 
-function describeConcept(input: { conceptName: string; conceptNotes: string | null }): string {
-  return input.conceptNotes
-    ? `Concept: ${input.conceptName}\nNotes: ${input.conceptNotes}`
-    : `Concept: ${input.conceptName}`;
+function describeConcept(concept: QuestionConcept): string {
+  return concept.notes
+    ? `Concept: ${concept.name}\nNotes: ${concept.notes}`
+    : `Concept: ${concept.name}`;
+}
+
+function describeConcepts(concepts: QuestionConcept[]): string {
+  return concepts.map(describeConcept).join("\n\n");
 }
 
 export class AnthropicLlmPort implements LlmPort {
   constructor(private readonly client: Anthropic) {}
 
   async generateQuestion(input: {
-    conceptName: string;
-    conceptNotes: string | null;
-    type: "recall" | "flashcard";
+    concepts: QuestionConcept[];
+    type: QuestionType;
   }): Promise<GeneratedQuestion> {
+    if (input.type === "scenario") {
+      const response = await this.client.messages.parse({
+        model: MODEL,
+        max_tokens: 1024,
+        system:
+          "You write a single realistic applied scenario question that can only be answered well by reasoning about all of the given concepts together. Describe a concrete situation or problem and ask the learner how they would approach it, without naming or giving away the answer.",
+        messages: [{ role: "user", content: describeConcepts(input.concepts) }],
+        output_config: { format: zodOutputFormat(PromptOnlySchema) },
+      });
+      if (!response.parsed_output) {
+        throw new Error("Failed to generate scenario question: no parsed output");
+      }
+      return { type: "scenario", prompt: response.parsed_output.prompt };
+    }
+
     if (input.type === "recall") {
       const response = await this.client.messages.parse({
         model: MODEL,
         max_tokens: 1024,
         system:
           "You write a single concise active-recall study question for a given concept. The question should prompt the learner to explain or apply the concept from memory, without giving away the answer.",
-        messages: [{ role: "user", content: describeConcept(input) }],
-        output_config: { format: zodOutputFormat(RecallQuestionSchema) },
+        messages: [{ role: "user", content: describeConcepts(input.concepts) }],
+        output_config: { format: zodOutputFormat(PromptOnlySchema) },
       });
       if (!response.parsed_output) {
         throw new Error("Failed to generate recall question: no parsed output");
@@ -59,7 +78,7 @@ export class AnthropicLlmPort implements LlmPort {
       max_tokens: 1024,
       system:
         "You write a single multiple-choice flashcard question for a given concept, with 3-4 plausible options. Exactly one option is correct. correctOptionIndex is the zero-based index of the correct option in the options array.",
-      messages: [{ role: "user", content: describeConcept(input) }],
+      messages: [{ role: "user", content: describeConcepts(input.concepts) }],
       output_config: { format: zodOutputFormat(FlashcardQuestionSchema) },
     });
     if (!response.parsed_output) {

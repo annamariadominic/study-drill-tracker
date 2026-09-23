@@ -1,10 +1,17 @@
-export type QuestionType = "recall" | "flashcard";
+/** Recall and flashcard Questions ask about one Concept; a scenario combines several. */
+export type SingleConceptQuestionType = "recall" | "flashcard";
+export type QuestionType = SingleConceptQuestionType | "scenario";
 export type Correctness = "correct" | "partial" | "incorrect";
 export type Confidence = "guessed" | "partial" | "confident";
 
 export type Question = {
   id: string;
-  conceptId: string;
+  /**
+   * The Concepts the Question asks about, in the order it presents them:
+   * exactly one for recall and flashcard, two or more for a scenario (see
+   * assertQuestionConcepts).
+   */
+  conceptIds: string[];
   /** null for a one-off Question asked outside a Drill. */
   drillId: string | null;
   /** Zero-based order within the Drill; null outside a Drill. */

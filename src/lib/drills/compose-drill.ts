@@ -16,7 +16,8 @@ export type DrillCandidate = {
 };
 
 export type ComposedQuestion = {
-  conceptId: string;
+  /** One Concept for recall and flashcard; two or more for a scenario. */
+  conceptIds: string[];
   type: QuestionType;
 };
 
@@ -98,7 +99,7 @@ export function composeDueDrill(input: {
       break;
     }
     for (const type of types) {
-      questions.push({ conceptId: candidate.conceptId, type });
+      questions.push({ conceptIds: [candidate.conceptId], type });
     }
   }
   return questions;

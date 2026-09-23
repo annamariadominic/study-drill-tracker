@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { QuestionIntegrityError } from "./errors";
 import { FakeQuestionsRepository } from "./fake-repository";
 
 describe("FakeQuestionsRepository", () => {
@@ -10,7 +11,7 @@ describe("FakeQuestionsRepository", () => {
 
   it("creates and retrieves a recall question with no options", async () => {
     const question = await repo.createQuestion({
-      conceptId: "concept-1",
+      conceptIds: ["concept-1"],
       type: "recall",
       prompt: "Explain idempotency.",
     });
@@ -22,7 +23,7 @@ describe("FakeQuestionsRepository", () => {
 
   it("creates and retrieves a flashcard question with options", async () => {
     const question = await repo.createQuestion({
-      conceptId: "concept-1",
+      conceptIds: ["concept-1"],
       type: "flashcard",
       prompt: "Pick the best definition.",
       options: ["A", "B", "C"],
@@ -33,13 +34,46 @@ describe("FakeQuestionsRepository", () => {
     expect(question.correctOptionIndex).toBe(1);
   });
 
+  it("creates a scenario question over several Concepts, keeping their order", async () => {
+    const question = await repo.createQuestion({
+      conceptIds: ["concept-2", "concept-1", "concept-3"],
+      type: "scenario",
+      prompt: "Design a rate-limited ML API.",
+    });
+
+    expect(question.conceptIds).toEqual(["concept-2", "concept-1", "concept-3"]);
+    expect(await repo.getQuestion(question.id)).toEqual(question);
+  });
+
+  it.each([
+    ["a recall question with two Concepts", "recall", ["concept-1", "concept-2"]],
+    ["a flashcard question with no Concepts", "flashcard", []],
+    ["a scenario question with one Concept", "scenario", ["concept-1"]],
+    ["a scenario question naming a Concept twice", "scenario", ["concept-1", "concept-1"]],
+  ] as const)("refuses %s", async (_, type, conceptIds) => {
+    await expect(
+      repo.createQuestion({ conceptIds: [...conceptIds], type, prompt: "Anything." }),
+    ).rejects.toThrow(QuestionIntegrityError);
+  });
+
+  it("creates none of a batch when one question breaks the Concept invariant", async () => {
+    await expect(
+      repo.createQuestions([
+        { conceptIds: ["concept-1"], type: "recall", prompt: "Fine.", drillId: "drill-1", position: 0 },
+        { conceptIds: ["concept-1"], type: "scenario", prompt: "Too few.", drillId: "drill-1", position: 1 },
+      ]),
+    ).rejects.toThrow(QuestionIntegrityError);
+
+    expect(await repo.listDrillQuestions("drill-1")).toEqual([]);
+  });
+
   it("returns null for a missing question", async () => {
     expect(await repo.getQuestion("missing")).toBeNull();
   });
 
   it("creates and retrieves an attempt", async () => {
     const question = await repo.createQuestion({
-      conceptId: "concept-1",
+      conceptIds: ["concept-1"],
       type: "recall",
       prompt: "Explain idempotency.",
     });
@@ -61,27 +95,27 @@ describe("FakeQuestionsRepository", () => {
 
   it("lists a drill's questions in position order and leaves out other questions", async () => {
     const second = await repo.createQuestion({
-      conceptId: "concept-2",
+      conceptIds: ["concept-2"],
       type: "recall",
       prompt: "Second.",
       drillId: "drill-1",
       position: 1,
     });
     const first = await repo.createQuestion({
-      conceptId: "concept-1",
+      conceptIds: ["concept-1"],
       type: "recall",
       prompt: "First.",
       drillId: "drill-1",
       position: 0,
     });
     await repo.createQuestion({
-      conceptId: "concept-3",
+      conceptIds: ["concept-3"],
       type: "recall",
       prompt: "Other drill.",
       drillId: "drill-2",
       position: 0,
     });
-    await repo.createQuestion({ conceptId: "concept-4", type: "recall", prompt: "Standalone." });
+    await repo.createQuestion({ conceptIds: ["concept-4"], type: "recall", prompt: "Standalone." });
 
     expect((await repo.listDrillQuestions("drill-1")).map((q) => q.id)).toEqual([
       first.id,
@@ -91,12 +125,12 @@ describe("FakeQuestionsRepository", () => {
 
   it("lists attempts for the given questions only", async () => {
     const question = await repo.createQuestion({
-      conceptId: "concept-1",
+      conceptIds: ["concept-1"],
       type: "recall",
       prompt: "Explain idempotency.",
     });
     const other = await repo.createQuestion({
-      conceptId: "concept-2",
+      conceptIds: ["concept-2"],
       type: "recall",
       prompt: "Explain retries.",
     });

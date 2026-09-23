@@ -68,7 +68,7 @@ describe("taking a Drill", () => {
       // Both Concepts were newly studied, so each was asked twice — but one
       // Drill is one review, so the interval is what a single
       // correct-and-confident Attempt earns, not that compounded twice.
-      expect(questions.filter((question) => question.conceptId === conceptId)).toHaveLength(2);
+      expect(questions.filter((question) => question.conceptIds.includes(conceptId))).toHaveLength(2);
       expect(concept?.reviewIntervalDays).toBe(3);
     }
   });

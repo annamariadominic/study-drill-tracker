@@ -139,7 +139,9 @@ export default async function DrillPage({
       <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {progress.steps.map((step) => (
           <li key={step.question.id} style={{ border: "1px solid #ccc", padding: "0.5rem" }}>
-            <strong>{conceptNames.get(step.question.conceptId)}</strong>{" "}
+            <strong>
+              {step.question.conceptIds.map((conceptId) => conceptNames.get(conceptId)).join(" + ")}
+            </strong>{" "}
             <span style={{ color: "#666" }}>({step.question.type})</span>
             <p style={{ margin: "0.25rem 0" }}>{step.attempt?.correctness ?? "unanswered"}</p>
           </li>

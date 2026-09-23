@@ -1,7 +1,7 @@
 import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
 
 export type CreateQuestionInput = {
-  conceptId: string;
+  conceptIds: string[];
   type: QuestionType;
   prompt: string;
   options?: string[] | null;
@@ -12,7 +12,11 @@ export type CreateQuestionInput = {
 
 export interface QuestionsRepository {
   createQuestion(input: CreateQuestionInput): Promise<Question>;
-  /** Creates several Questions as one unit, so a Drill's Questions land together. */
+  /**
+   * Creates several Questions as one unit, so a Drill's Questions land
+   * together. Throws QuestionIntegrityError, creating none, if any Question
+   * has the wrong Concepts for its type.
+   */
   createQuestions(inputs: CreateQuestionInput[]): Promise<Question[]>;
   getQuestion(id: string): Promise<Question | null>;
   /** Questions of one Drill, in the order they should be asked. */

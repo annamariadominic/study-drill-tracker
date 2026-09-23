@@ -52,19 +52,21 @@ export async function startDueDrill(
 
   const generated = await Promise.all(
     plan.map(async (planned) => {
-      const concept = conceptsById.get(planned.conceptId);
-      if (!concept) {
-        throw new NotFoundError("Concept", planned.conceptId);
-      }
+      const concepts = planned.conceptIds.map((conceptId) => {
+        const concept = conceptsById.get(conceptId);
+        if (!concept) {
+          throw new NotFoundError("Concept", conceptId);
+        }
+        return concept;
+      });
       try {
         const content = await deps.llmPort.generateQuestion({
-          conceptName: concept.name,
-          conceptNotes: concept.notes,
+          concepts: concepts.map((concept) => ({ name: concept.name, notes: concept.notes })),
           type: planned.type,
         });
-        return { conceptId: concept.id, content };
+        return { conceptIds: planned.conceptIds, content };
       } catch (cause) {
-        throw new DrillGenerationError(concept.name, { cause });
+        throw new DrillGenerationError(concepts.map((concept) => concept.name).join(", "), { cause });
       }
     }),
   );
@@ -77,8 +79,8 @@ export async function startDueDrill(
   });
 
   await deps.questionsRepo.createQuestions(
-    generated.map(({ conceptId, content }, position) => ({
-      conceptId,
+    generated.map(({ conceptIds, content }, position) => ({
+      conceptIds,
       drillId: drill.id,
       position,
       ...questionFieldsFromGenerated(content),

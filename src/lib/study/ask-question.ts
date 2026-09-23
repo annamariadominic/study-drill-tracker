@@ -1,7 +1,7 @@
 import type { LlmPort } from "@/lib/llm/port";
 import { questionFieldsFromGenerated } from "@/lib/questions/from-generated";
 import type { QuestionsRepository } from "@/lib/questions/repository";
-import type { Question, QuestionType } from "@/lib/questions/types";
+import type { Question, SingleConceptQuestionType } from "@/lib/questions/types";
 import { NotFoundError } from "@/lib/syllabus/errors";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
 import { ConceptNotStudiedError } from "./errors";
@@ -12,7 +12,7 @@ export async function askQuestion(
     questionsRepo: QuestionsRepository;
     llmPort: LlmPort;
   },
-  input: { conceptId: string; type: QuestionType },
+  input: { conceptId: string; type: SingleConceptQuestionType },
 ): Promise<Question> {
   const concept = await deps.syllabusRepo.getConcept(input.conceptId);
   if (!concept) {
@@ -23,13 +23,12 @@ export async function askQuestion(
   }
 
   const generated = await deps.llmPort.generateQuestion({
-    conceptName: concept.name,
-    conceptNotes: concept.notes,
+    concepts: [{ name: concept.name, notes: concept.notes }],
     type: input.type,
   });
 
   return deps.questionsRepo.createQuestion({
-    conceptId: concept.id,
+    conceptIds: [concept.id],
     ...questionFieldsFromGenerated(generated),
   });
 }

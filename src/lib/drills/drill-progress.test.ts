@@ -5,7 +5,7 @@ import { drillProgress } from "./drill-progress";
 function question(id: string, position: number): Question {
   return {
     id,
-    conceptId: `concept-${id}`,
+    conceptIds: [`concept-${id}`],
     drillId: "drill-1",
     position,
     type: "recall",
