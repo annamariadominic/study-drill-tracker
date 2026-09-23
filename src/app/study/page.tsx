@@ -16,6 +16,9 @@ export default async function StudyPage({
       <p>
         <Link href="/study/due">See what&apos;s due for review &rarr;</Link>
       </p>
+      <p>
+        <Link href="/study/random">Start a random Drill &rarr;</Link>
+      </p>
 
       {studiedConcepts.length === 0 ? (
         <p>No studied Concepts yet. Mark a Concept as studied on its Subject page first.</p>

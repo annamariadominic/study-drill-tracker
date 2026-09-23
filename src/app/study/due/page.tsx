@@ -44,7 +44,10 @@ export default async function DueConceptsPage({
       ) : null}
 
       {domains.length === 0 ? (
-        <p>Nothing is due right now. Check back later.</p>
+        <p>
+          Nothing is due right now. Check back later, or{" "}
+          <Link href="/study/random">start a random Drill</Link>.
+        </p>
       ) : (
         domains.map(([domainId, group]) => (
           <section key={domainId} style={{ marginBottom: "2rem" }}>
