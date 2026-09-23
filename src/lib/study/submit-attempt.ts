@@ -6,42 +6,46 @@ import type { SyllabusRepository } from "@/lib/syllabus/repository";
 import { initialReviewSchedule, scheduleFromFields, scheduleNextReview } from "./scheduling";
 
 /**
- * Whether this Attempt is the one that advances its Concept's review schedule.
+ * The Concepts whose review schedule this Attempt advances.
  *
- * A Drill advances a Concept's schedule at most once (ADR 0006). Where the
+ * A Drill advances each Concept's schedule at most once (ADR 0006). Where the
  * Drill asks a recall Question about the Concept, that recall Attempt is the
  * signal, since producing the answer is stricter evidence than recognising it
- * or meeting the Concept inside a wider scenario. Where it doesn't, the one
- * Question the Drill does ask provides the update instead. Attempts that
- * aren't the signal are still recorded and graded.
+ * or meeting the Concept inside a wider scenario. Where it doesn't, the first
+ * Attempt on whatever the Drill does ask about it provides the update instead
+ * — so a scenario advances each Concept it combines that the Drill hasn't
+ * scheduled some other way. Attempts that aren't the signal are still
+ * recorded and graded.
  *
- * Outside a Drill every Attempt advances the schedule, as it always has.
+ * Outside a Drill every Attempt advances the schedule of each of its Concepts.
  */
-async function advancesReviewSchedule(
+async function conceptsToAdvance(
   questionsRepo: QuestionsRepository,
   question: Question,
-): Promise<boolean> {
+): Promise<string[]> {
   if (!question.drillId) {
-    return true;
+    return question.conceptIds;
   }
 
-  const [conceptId] = question.conceptIds;
-  const aboutSameConcept = (await questionsRepo.listDrillQuestions(question.drillId)).filter(
-    (drillQuestion) => drillQuestion.conceptIds.includes(conceptId),
+  const drillQuestions = await questionsRepo.listDrillQuestions(question.drillId);
+  const attemptedQuestionIds = new Set(
+    (await questionsRepo.listAttemptsForQuestions(drillQuestions.map(({ id }) => id))).map(
+      (attempt) => attempt.questionId,
+    ),
   );
-  const recallQuestions = aboutSameConcept.filter(
-    (drillQuestion) => drillQuestion.type === "recall",
-  );
-  const signalQuestions = recallQuestions.length > 0 ? recallQuestions : aboutSameConcept;
 
-  if (!signalQuestions.some((drillQuestion) => drillQuestion.id === question.id)) {
-    return false;
-  }
+  return question.conceptIds.filter((conceptId) => {
+    const aboutConcept = drillQuestions.filter((drillQuestion) =>
+      drillQuestion.conceptIds.includes(conceptId),
+    );
+    const recallQuestions = aboutConcept.filter((drillQuestion) => drillQuestion.type === "recall");
+    const signalQuestions = recallQuestions.length > 0 ? recallQuestions : aboutConcept;
 
-  const alreadyAnswered = await questionsRepo.listAttemptsForQuestions(
-    signalQuestions.map((drillQuestion) => drillQuestion.id),
-  );
-  return alreadyAnswered.length === 0;
+    return (
+      signalQuestions.some((drillQuestion) => drillQuestion.id === question.id) &&
+      !signalQuestions.some((drillQuestion) => attemptedQuestionIds.has(drillQuestion.id))
+    );
+  });
 }
 
 export async function submitAttempt(
@@ -60,7 +64,7 @@ export async function submitAttempt(
 
   // Checked before the Attempt is recorded, so it doesn't count itself as an
   // earlier review of the Concept.
-  const advancesSchedule = await advancesReviewSchedule(deps.questionsRepo, question);
+  const advancingConceptIds = await conceptsToAdvance(deps.questionsRepo, question);
 
   let correctness: Correctness;
   let gradedExplanation: string;
@@ -101,17 +105,22 @@ export async function submitAttempt(
     gradedExplanation,
   });
 
-  const concept = await deps.syllabusRepo.getConcept(question.conceptIds[0]);
-  if (concept && concept.status === "studied" && advancesSchedule) {
-    const currentSchedule = scheduleFromFields(concept) ?? initialReviewSchedule();
-    const nextSchedule = scheduleNextReview(currentSchedule, { correctness, confidence: input.confidence });
-    try {
-      await deps.syllabusRepo.updateConceptReviewSchedule(concept.id, nextSchedule);
-    } catch {
-      // The Attempt is already recorded and graded; a failure to advance the
-      // review schedule shouldn't be reported to the user as a failed attempt.
-    }
-  }
+  await Promise.all(
+    advancingConceptIds.map(async (conceptId) => {
+      const concept = await deps.syllabusRepo.getConcept(conceptId);
+      if (!concept || concept.status !== "studied") {
+        return;
+      }
+      const currentSchedule = scheduleFromFields(concept) ?? initialReviewSchedule();
+      const nextSchedule = scheduleNextReview(currentSchedule, { correctness, confidence: input.confidence });
+      try {
+        await deps.syllabusRepo.updateConceptReviewSchedule(concept.id, nextSchedule);
+      } catch {
+        // The Attempt is already recorded and graded; a failure to advance the
+        // review schedule shouldn't be reported to the user as a failed attempt.
+      }
+    }),
+  );
 
   return attempt;
 }

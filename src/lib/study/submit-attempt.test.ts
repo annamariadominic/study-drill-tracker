@@ -374,4 +374,173 @@ describe("submitAttempt", () => {
 
     expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
   });
+
+  describe("scenario Questions", () => {
+    async function buildScenarioConcepts(syllabusRepo: FakeSyllabusRepository) {
+      const domain = await syllabusRepo.createDomain({ name: "Software Engineering" });
+      const systemDesign = await syllabusRepo.createSubject(domain.id, { name: "System Design" });
+      const mlSystemDesign = await syllabusRepo.createSubject(domain.id, { name: "ML System Design" });
+      const queues = await syllabusRepo.createConcept(systemDesign.id, { name: "Queues" });
+      const latency = await syllabusRepo.createConcept(mlSystemDesign.id, { name: "Model latency" });
+      return [
+        await syllabusRepo.setConceptStatus(queues.id, "studied"),
+        await syllabusRepo.setConceptStatus(latency.id, "studied"),
+      ];
+    }
+
+    async function intervalOf(syllabusRepo: FakeSyllabusRepository, conceptId: string) {
+      return (await syllabusRepo.getConcept(conceptId))?.reviewIntervalDays;
+    }
+
+    it("grades a scenario answer through the LLM port", async () => {
+      const questionsRepo = new FakeQuestionsRepository();
+      const syllabusRepo = new FakeSyllabusRepository();
+      const llmPort = new FakeLlmPort(undefined, async () => ({
+        correctness: "partial",
+        explanation: "Covers the queue but not the latency budget.",
+      }));
+      const [queues, latency] = await buildScenarioConcepts(syllabusRepo);
+      const scenario = await questionsRepo.createQuestion({
+        conceptIds: [queues.id, latency.id],
+        drillId: "drill-1",
+        position: 0,
+        type: "scenario",
+        prompt: "Design an inference API under load.",
+      });
+
+      const attempt = await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: scenario.id, confidence: "partial", submittedAnswer: "Put a queue in front." },
+      );
+
+      expect(llmPort.gradeAnswerCallCount).toBe(1);
+      expect(attempt.correctness).toBe("partial");
+      expect(attempt.submittedAnswer).toBe("Put a queue in front.");
+    });
+
+    it("advances every Concept the scenario combined when the Drill asks nothing else about them", async () => {
+      const questionsRepo = new FakeQuestionsRepository();
+      const syllabusRepo = new FakeSyllabusRepository();
+      const llmPort = new FakeLlmPort();
+      const [queues, latency] = await buildScenarioConcepts(syllabusRepo);
+      const scenario = await questionsRepo.createQuestion({
+        conceptIds: [queues.id, latency.id],
+        drillId: "drill-1",
+        position: 0,
+        type: "scenario",
+        prompt: "Design an inference API under load.",
+      });
+
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
+      );
+
+      expect(await intervalOf(syllabusRepo, queues.id)).toBeGreaterThan(1);
+      expect(await intervalOf(syllabusRepo, latency.id)).toBeGreaterThan(1);
+    });
+
+    it("leaves a Concept with its own recall Question to that recall Attempt, even when the scenario is answered first", async () => {
+      const questionsRepo = new FakeQuestionsRepository();
+      const syllabusRepo = new FakeSyllabusRepository();
+      const llmPort = new FakeLlmPort();
+      const [queues, latency] = await buildScenarioConcepts(syllabusRepo);
+      const recall = await questionsRepo.createQuestion({
+        conceptIds: [queues.id],
+        drillId: "drill-1",
+        position: 0,
+        type: "recall",
+        prompt: "Explain queues.",
+      });
+      const scenario = await questionsRepo.createQuestion({
+        conceptIds: [queues.id, latency.id],
+        drillId: "drill-1",
+        position: 1,
+        type: "scenario",
+        prompt: "Design an inference API under load.",
+      });
+
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
+      );
+
+      expect(await intervalOf(syllabusRepo, queues.id)).toBe(1);
+      expect(await intervalOf(syllabusRepo, latency.id)).toBeGreaterThan(1);
+
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: recall.id, confidence: "confident", submittedAnswer: "Buffers work." },
+      );
+
+      expect(await intervalOf(syllabusRepo, queues.id)).toBeGreaterThan(1);
+    });
+
+    it("never advances a Concept a second time when a flashcard already gave it its one update", async () => {
+      const questionsRepo = new FakeQuestionsRepository();
+      const syllabusRepo = new FakeSyllabusRepository();
+      const llmPort = new FakeLlmPort();
+      const [queues, latency] = await buildScenarioConcepts(syllabusRepo);
+      const flashcard = await questionsRepo.createQuestion({
+        conceptIds: [queues.id],
+        drillId: "drill-1",
+        position: 0,
+        type: "flashcard",
+        prompt: "Pick the best definition.",
+        options: ["Correct one", "Wrong one"],
+        correctOptionIndex: 0,
+      });
+      const scenario = await questionsRepo.createQuestion({
+        conceptIds: [queues.id, latency.id],
+        drillId: "drill-1",
+        position: 1,
+        type: "scenario",
+        prompt: "Design an inference API under load.",
+      });
+
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
+      );
+      const queuesAfterFlashcard = await syllabusRepo.getConcept(queues.id);
+
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
+      );
+
+      const queuesAfterScenario = await syllabusRepo.getConcept(queues.id);
+      expect(queuesAfterScenario?.reviewIntervalDays).toBe(queuesAfterFlashcard?.reviewIntervalDays);
+      expect(queuesAfterScenario?.nextReviewDueAt).toBe(queuesAfterFlashcard?.nextReviewDueAt);
+      expect(await intervalOf(syllabusRepo, latency.id)).toBeGreaterThan(1);
+    });
+
+    it("advances the Concepts it combined only once, even if the scenario is answered again", async () => {
+      const questionsRepo = new FakeQuestionsRepository();
+      const syllabusRepo = new FakeSyllabusRepository();
+      const llmPort = new FakeLlmPort();
+      const [queues, latency] = await buildScenarioConcepts(syllabusRepo);
+      const scenario = await questionsRepo.createQuestion({
+        conceptIds: [queues.id, latency.id],
+        drillId: "drill-1",
+        position: 0,
+        type: "scenario",
+        prompt: "Design an inference API under load.",
+      });
+
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
+      );
+      const afterFirst = await syllabusRepo.getConcept(latency.id);
+      await submitAttempt(
+        { questionsRepo, syllabusRepo, llmPort },
+        { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
+      );
+
+      expect((await syllabusRepo.getConcept(latency.id))?.reviewIntervalDays).toBe(
+        afterFirst?.reviewIntervalDays,
+      );
+    });
+  });
 });
