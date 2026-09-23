@@ -59,10 +59,17 @@ describe("taking a Drill", () => {
     expect(progress.summary.total).toBeGreaterThan(0);
     expect(progress.summary.correct).toBe(progress.summary.total);
 
+    const questions = await questionsRepo.listDrillQuestions(drill.id);
     for (const conceptId of conceptIds) {
       const concept = await syllabusRepo.getConcept(conceptId);
       expect(concept?.nextReviewDueAt).toBeTruthy();
       expect(new Date(concept?.nextReviewDueAt ?? 0).getTime()).toBeGreaterThan(startedAt);
+
+      // Both Concepts were newly studied, so each was asked twice — but one
+      // Drill is one review, so the interval is what a single
+      // correct-and-confident Attempt earns, not that compounded twice.
+      expect(questions.filter((question) => question.conceptId === conceptId)).toHaveLength(2);
+      expect(concept?.reviewIntervalDays).toBe(3);
     }
   });
 });

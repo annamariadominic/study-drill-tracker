@@ -206,4 +206,110 @@ describe("submitAttempt", () => {
     expect(updatedConcept?.reviewIntervalDays).toBeNull();
     expect(updatedConcept?.nextReviewDueAt).toBeNull();
   });
+
+  it("advances a Concept's review schedule only once per Drill", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+
+    const recall = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 0,
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+    const flashcard = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 1,
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: recall.id, confidence: "confident", submittedAnswer: "No extra effect." },
+    );
+    const afterFirst = await syllabusRepo.getConcept(concept.id);
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
+    );
+    const afterSecond = await syllabusRepo.getConcept(concept.id);
+
+    expect(afterFirst?.reviewIntervalDays).toBeGreaterThan(1);
+    expect(afterSecond?.reviewIntervalDays).toBe(afterFirst?.reviewIntervalDays);
+    expect(afterSecond?.reviewEaseFactor).toBe(afterFirst?.reviewEaseFactor);
+  });
+
+  it("still records the second Attempt on a Concept within a Drill", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+
+    const first = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 0,
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+    const second = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      drillId: "drill-1",
+      position: 1,
+      type: "recall",
+      prompt: "Explain it again.",
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: first.id, confidence: "confident", submittedAnswer: "No extra effect." },
+    );
+    const attempt = await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: second.id, confidence: "guessed", submittedAnswer: "Something else." },
+    );
+
+    expect(await questionsRepo.getAttempt(attempt.id)).toEqual(attempt);
+    expect(attempt.correctness).toBe("correct");
+  });
+
+  it("advances the schedule again for a Concept reviewed outside a Drill", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+
+    const first = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+    const second = await questionsRepo.createQuestion({
+      conceptId: concept.id,
+      type: "recall",
+      prompt: "Explain idempotency again.",
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: first.id, confidence: "confident", submittedAnswer: "No extra effect." },
+    );
+    const afterFirst = await syllabusRepo.getConcept(concept.id);
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: second.id, confidence: "confident", submittedAnswer: "No extra effect." },
+    );
+    const afterSecond = await syllabusRepo.getConcept(concept.id);
+
+    expect(afterSecond?.reviewIntervalDays).toBeGreaterThan(afterFirst?.reviewIntervalDays ?? 0);
+  });
 });

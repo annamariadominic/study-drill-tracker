@@ -34,4 +34,4 @@ The graded outcome of an Attempt: **correct**, **partial**, or **incorrect**. Fl
 A self-reported rating on an Attempt, one of **guessed**, **partial**, or **confident**. Submitted at the same time as the answer, before Correctness is revealed, so it isn't biased by already knowing the grade.
 
 **Review schedule**:
-Per-Concept spaced-repetition state that determines when a Concept next becomes due. Updated after every Attempt on that Concept, from any Drill (scheduled or ad hoc), using both Correctness and Confidence as input.
+Per-Concept spaced-repetition state that determines when a Concept next becomes due. Updated from Attempts on that Concept, in any Drill (scheduled or ad hoc), using both Correctness and Confidence as input. A Drill advances a Concept's schedule once, on the first Attempt on that Concept, even where the Drill asks about it more than once (see ADR 0006).

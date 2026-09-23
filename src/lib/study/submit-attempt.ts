@@ -1,9 +1,31 @@
 import type { LlmPort } from "@/lib/llm/port";
 import { NotFoundError } from "@/lib/questions/errors";
 import type { QuestionsRepository } from "@/lib/questions/repository";
-import type { Attempt, Confidence, Correctness } from "@/lib/questions/types";
+import type { Attempt, Confidence, Correctness, Question } from "@/lib/questions/types";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
 import { initialReviewSchedule, scheduleFromFields, scheduleNextReview } from "./scheduling";
+
+/**
+ * Whether this Concept has already been reviewed earlier in the same Drill. A
+ * Drill can ask about one Concept more than once (a weak Concept gets both a
+ * recall and a flashcard Question), but those Questions are one review
+ * sitting, not several (ADR 0006).
+ */
+async function conceptAlreadyReviewedInDrill(
+  questionsRepo: QuestionsRepository,
+  question: Question,
+): Promise<boolean> {
+  if (!question.drillId) {
+    return false;
+  }
+  const sameConcept = (await questionsRepo.listDrillQuestions(question.drillId)).filter(
+    (drillQuestion) => drillQuestion.conceptId === question.conceptId,
+  );
+  const attempts = await questionsRepo.listAttemptsForQuestions(
+    sameConcept.map((drillQuestion) => drillQuestion.id),
+  );
+  return attempts.length > 0;
+}
 
 export async function submitAttempt(
   deps: { questionsRepo: QuestionsRepository; syllabusRepo: SyllabusRepository; llmPort: LlmPort },
@@ -18,6 +40,10 @@ export async function submitAttempt(
   if (!question) {
     throw new NotFoundError("Question", input.questionId);
   }
+
+  // Checked before the Attempt is recorded, so the new Attempt doesn't count
+  // itself as an earlier review.
+  const alreadyReviewedInDrill = await conceptAlreadyReviewedInDrill(deps.questionsRepo, question);
 
   let correctness: Correctness;
   let gradedExplanation: string;
@@ -59,7 +85,7 @@ export async function submitAttempt(
   });
 
   const concept = await deps.syllabusRepo.getConcept(question.conceptId);
-  if (concept && concept.status === "studied") {
+  if (concept && concept.status === "studied" && !alreadyReviewedInDrill) {
     const currentSchedule = scheduleFromFields(concept) ?? initialReviewSchedule();
     const nextSchedule = scheduleNextReview(currentSchedule, { correctness, confidence: input.confidence });
     try {
