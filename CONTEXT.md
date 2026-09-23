@@ -16,7 +16,7 @@ The atomic unit of study within a Subject (e.g. queues, retries, idempotency, ca
 _Avoid_: Topic.
 
 **Drill**:
-A generated review session made of multiple Questions, created on demand (never pre-authored or stored as a bank). Stays within a single Domain. Drawn either from the due-list (Concepts whose review schedule says they're due) or requested ad hoc, optionally scoped to the whole library, a single Subject, or hand-picked Concepts.
+A generated review session made of multiple Questions, created on demand (never pre-authored or stored as a bank). Stays within a single Domain. Drawn either from the due-list (Concepts whose review schedule says they're due) or requested ad hoc, optionally scoped to the whole library, a single Subject, or hand-picked Concepts. An ad hoc (random) Drill over the whole library still draws just one Domain to stay in (see ADR 0009).
 
 **Question**:
 A single item within a Drill. Comes in three kinds:
