@@ -39,9 +39,10 @@ export async function startDueDrill(
   const plan = composeDueDrill({
     domainId: domain.id,
     maxQuestions: input.maxQuestions,
-    candidates: due.map(({ concept, domain: conceptDomain }) => ({
+    candidates: due.map(({ concept, subject, domain: conceptDomain }) => ({
       conceptId: concept.id,
       domainId: conceptDomain.id,
+      subjectId: subject.id,
       schedule: scheduleFromFields(concept),
     })),
   });

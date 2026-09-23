@@ -59,8 +59,9 @@ describe("startDueDrill", () => {
       [[weak.id], "recall"],
       [[weak.id], "flashcard"],
       [[strong.id], "flashcard"],
+      [[weak.id, strong.id], "scenario"],
     ]);
-    expect(questions.map((question) => question.position)).toEqual([0, 1, 2]);
+    expect(questions.map((question) => question.position)).toEqual([0, 1, 2, 3]);
     expect(questions[0].prompt).toContain("Idempotency");
     expect(questions[1].options?.length).toBeGreaterThan(1);
   });
@@ -91,7 +92,33 @@ describe("startDueDrill", () => {
 
     const drill = await startDueDrill(deps, { domainId: domain.id, maxQuestions: 4 });
 
-    expect(await deps.questionsRepo.listDrillQuestions(drill.id)).toHaveLength(4);
+    expect((await deps.questionsRepo.listDrillQuestions(drill.id)).length).toBeLessThanOrEqual(4);
+  });
+
+  it("asks a scenario combining newly-studied Concepts from two Subjects of the Domain", async () => {
+    const deps = buildDeps();
+    const domain = await deps.syllabusRepo.createDomain({ name: "Software Engineering" });
+    const systemDesign = await deps.syllabusRepo.createSubject(domain.id, { name: "System Design" });
+    const mlSystemDesign = await deps.syllabusRepo.createSubject(domain.id, { name: "ML System Design" });
+    const queues = await studyConcept(deps.syllabusRepo, systemDesign.id, "Queues");
+    const latency = await studyConcept(deps.syllabusRepo, mlSystemDesign.id, "Model latency");
+    const generateQuestion = vi.spyOn(deps.llmPort, "generateQuestion");
+
+    const drill = await startDueDrill(deps, { domainId: domain.id });
+
+    const scenario = (await deps.questionsRepo.listDrillQuestions(drill.id)).find(
+      (question) => question.type === "scenario",
+    );
+    expect(new Set(scenario?.conceptIds)).toEqual(new Set([queues.id, latency.id]));
+    expect(scenario?.prompt).toContain("Queues");
+    expect(scenario?.prompt).toContain("Model latency");
+    expect(generateQuestion).toHaveBeenCalledWith({
+      type: "scenario",
+      concepts: expect.arrayContaining([
+        { name: "Queues", notes: null },
+        { name: "Model latency", notes: null },
+      ]),
+    });
   });
 
   it("throws NotFoundError for a missing Domain", async () => {

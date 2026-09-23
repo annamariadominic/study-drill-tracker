@@ -47,7 +47,7 @@ describe("taking a Drill", () => {
         {
           questionId: question.id,
           confidence: "confident",
-          submittedAnswer: question.type === "recall" ? "An answer." : undefined,
+          submittedAnswer: question.type === "flashcard" ? undefined : "An answer.",
           selectedOptionIndex: question.type === "flashcard" ? 0 : undefined,
         },
       );
@@ -65,10 +65,11 @@ describe("taking a Drill", () => {
       expect(concept?.nextReviewDueAt).toBeTruthy();
       expect(new Date(concept?.nextReviewDueAt ?? 0).getTime()).toBeGreaterThan(startedAt);
 
-      // Both Concepts were newly studied, so each was asked twice — but one
-      // Drill is one review, so the interval is what a single
-      // correct-and-confident Attempt earns, not that compounded twice.
-      expect(questions.filter((question) => question.conceptIds.includes(conceptId))).toHaveLength(2);
+      // Both Concepts were newly studied, so each was asked a recall and a
+      // flashcard, and met again in the scenario — but one Drill is one
+      // review, so the interval is what a single correct-and-confident
+      // Attempt earns, not that compounded three times.
+      expect(questions.filter((question) => question.conceptIds.includes(conceptId))).toHaveLength(3);
       expect(concept?.reviewIntervalDays).toBe(3);
     }
   });

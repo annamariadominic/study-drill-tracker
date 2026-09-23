@@ -11,6 +11,7 @@ export type DrillCandidate = {
   conceptId: string;
   /** The Domain the Concept's Subject belongs to. */
   domainId: string;
+  subjectId: string;
   /** null for a Concept that has never been scheduled. */
   schedule: ReviewScheduleState | null;
 };
@@ -22,6 +23,9 @@ export type ComposedQuestion = {
 };
 
 export const DEFAULT_MAX_QUESTIONS = 10;
+
+/** The most Concepts one scenario Question combines. */
+export const MAX_SCENARIO_CONCEPTS = 3;
 
 /** At or above this interval a Concept has survived several successful reviews. */
 const STRONG_INTERVAL_DAYS = 21;
@@ -60,12 +64,47 @@ function dueTime(candidate: DrillCandidate): number {
 }
 
 /**
+ * The Concepts a Drill's scenario Question combines, drawn from the ranked
+ * in-Domain candidates, or none if there aren't two to combine.
+ *
+ * It takes the best-ranked Concept from each Subject first, so a scenario
+ * spans Subjects wherever the Domain offers more than one, then tops up in
+ * rank order. Weak and never-attempted Concepts rank first, so they're as
+ * eligible here as anywhere: a scenario has no minimum maturity.
+ */
+function scenarioConceptIds(ranked: DrillCandidate[]): string[] {
+  const chosen = new Set<DrillCandidate>();
+  const subjectsCovered = new Set<string>();
+  for (const candidate of ranked) {
+    if (chosen.size < MAX_SCENARIO_CONCEPTS && !subjectsCovered.has(candidate.subjectId)) {
+      chosen.add(candidate);
+      subjectsCovered.add(candidate.subjectId);
+    }
+  }
+  for (const candidate of ranked) {
+    if (chosen.size < MAX_SCENARIO_CONCEPTS) {
+      chosen.add(candidate);
+    }
+  }
+  if (chosen.size < 2) {
+    return [];
+  }
+  return ranked.filter((candidate) => chosen.has(candidate)).map((candidate) => candidate.conceptId);
+}
+
+/**
  * Decides which due Concepts a Drill covers and with what mix of Question
  * types. Pure: the caller supplies the due Concepts and turns the result into
  * actual Questions.
  *
- * Concepts outside the Drill's Domain are dropped, since a Drill stays within
- * one Domain (ADR 0001).
+ * Concepts outside the Drill's Domain are dropped before anything is chosen,
+ * since a Drill — and so every scenario in it — stays within one Domain
+ * (ADR 0001).
+ *
+ * Where two or more Concepts are due, the Drill closes with one scenario
+ * Question combining some of them, after the recall and flashcard Questions.
+ * Its slot is kept back from the per-Concept Questions, except in a
+ * single-Question Drill, which has no room for both.
  */
 export function composeDueDrill(input: {
   domainId: string;
@@ -90,17 +129,24 @@ export function composeDueDrill(input: {
       return a.candidate.conceptId.localeCompare(b.candidate.conceptId);
     });
 
+  const scenario =
+    maxQuestions > 1 ? scenarioConceptIds(ranked.map(({ candidate }) => candidate)) : [];
+  const perConceptRoom = scenario.length > 0 ? maxQuestions - 1 : maxQuestions;
+
   const questions: ComposedQuestion[] = [];
   for (const { candidate, strength } of ranked) {
     const types = QUESTION_TYPES_BY_STRENGTH[strength];
     // A Concept is included whole or not at all, so a Drill never stops
     // mid-Concept when it runs out of room.
-    if (questions.length + types.length > maxQuestions) {
+    if (questions.length + types.length > perConceptRoom) {
       break;
     }
     for (const type of types) {
       questions.push({ conceptIds: [candidate.conceptId], type });
     }
+  }
+  if (scenario.length > 0) {
+    questions.push({ conceptIds: scenario, type: "scenario" });
   }
   return questions;
 }
