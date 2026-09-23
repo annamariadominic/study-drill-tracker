@@ -1,8 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { QuestionType } from "@/lib/questions/types";
-import type { GeneratedQuestion, GradedAnswer, LlmPort, QuestionConcept } from "./port";
+import type {
+  GenerateQuestionInput,
+  GeneratedQuestion,
+  GradedAnswer,
+  LlmPort,
+  QuestionConcept,
+} from "./port";
 
 const MODEL = "claude-opus-5";
 
@@ -39,10 +44,7 @@ function describeConcepts(concepts: QuestionConcept[]): string {
 export class AnthropicLlmPort implements LlmPort {
   constructor(private readonly client: Anthropic) {}
 
-  async generateQuestion(input: {
-    concepts: QuestionConcept[];
-    type: QuestionType;
-  }): Promise<GeneratedQuestion> {
+  async generateQuestion(input: GenerateQuestionInput): Promise<GeneratedQuestion> {
     if (input.type === "scenario") {
       const response = await this.client.messages.parse({
         model: MODEL,

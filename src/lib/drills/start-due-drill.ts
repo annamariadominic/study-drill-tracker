@@ -67,7 +67,7 @@ export async function startDueDrill(
         });
         return { conceptIds: planned.conceptIds, content };
       } catch (cause) {
-        throw new DrillGenerationError(concepts.map((concept) => concept.name).join(", "), { cause });
+        throw new DrillGenerationError(concepts.map((concept) => concept.name), { cause });
       }
     }),
   );

@@ -4,11 +4,14 @@
 create table question_concepts (
   question_id uuid not null references questions (id) on delete cascade,
   -- No cascade: deleting a Concept that Questions still ask about would leave
-  -- those Questions with too few Concepts, so the delete is refused instead.
-  -- A delete that also removes the Questions (e.g. of a whole Domain, which
-  -- takes its Drills with it) still succeeds, as the check runs at the end of
-  -- the statement.
-  concept_id uuid not null references concepts (id) on delete no action,
+  -- those Questions with too few Concepts, so the delete is refused instead
+  -- (ADR 0007). Deferred to commit, so a delete that also removes every such
+  -- Question still succeeds once all its cascades have run: deleting a Domain
+  -- takes its Drills and their Questions with it. One-off Questions asked
+  -- outside a Drill belong to no Drill, so they block the delete of their
+  -- Concept, Subject or Domain until they're removed.
+  concept_id uuid not null
+    references concepts (id) on delete no action deferrable initially deferred,
   -- The order the Question presents its Concepts in.
   position integer not null,
   primary key (question_id, concept_id),
@@ -35,16 +38,23 @@ alter table questions
 -- Takes a JSON array of objects with keys drill_id, position, type, prompt,
 -- options, correct_option_index and concept_ids (an array, in presentation
 -- order). Returns the inserted question rows as a JSON array in input order.
-create function create_questions(questions jsonb) returns jsonb
+create function create_questions(inputs jsonb) returns jsonb
 language plpgsql
+set search_path = public
 as $$
 declare
   input jsonb;
   inserted questions;
   created jsonb := '[]'::jsonb;
 begin
-  for input in select value from jsonb_array_elements(questions) with ordinality order by ordinality
+  for input in select value from jsonb_array_elements(inputs) with ordinality order by ordinality
   loop
+    -- A shape check, not a business rule: without it a missing concept_ids
+    -- would quietly insert a Question with no links at all.
+    if jsonb_typeof(input -> 'concept_ids') is distinct from 'array' then
+      raise exception 'create_questions: concept_ids must be an array';
+    end if;
+
     insert into questions (drill_id, position, type, prompt, options, correct_option_index)
     values (
       (input ->> 'drill_id')::uuid,

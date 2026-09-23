@@ -98,7 +98,7 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
     // One database function call inserts the Questions and their Concept links
     // in a single transaction, so a Drill's Questions are all written or none are.
     const { data, error } = await this.client.rpc("create_questions", {
-      questions: inputs.map(toCreateQuestionsArg),
+      inputs: inputs.map(toCreateQuestionsArg),
     });
     if (error) throw error;
     // Rows come back in input order, so each lines up with the Concepts it was given.

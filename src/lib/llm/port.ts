@@ -16,15 +16,17 @@ export type QuestionConcept = {
   notes: string | null;
 };
 
+/**
+ * What to write one Question about: a single Concept for recall or flashcard,
+ * or every Concept a scenario combines.
+ */
+export type GenerateQuestionInput = {
+  concepts: QuestionConcept[];
+  type: QuestionType;
+};
+
 export interface LlmPort {
-  /**
-   * Writes one Question: a recall or flashcard Question about a single
-   * Concept, or a scenario prompt that combines every Concept given.
-   */
-  generateQuestion(input: {
-    concepts: QuestionConcept[];
-    type: QuestionType;
-  }): Promise<GeneratedQuestion>;
+  generateQuestion(input: GenerateQuestionInput): Promise<GeneratedQuestion>;
 
   gradeAnswer(input: { prompt: string; submittedAnswer: string }): Promise<GradedAnswer>;
 }

@@ -248,6 +248,22 @@ describe("composeDueDrill scenario Questions", () => {
     expect(scenarios(questions)[0].conceptIds).toEqual(["weak-a1", "weak-a2", "strong-b1"]);
   });
 
+  it("gives up the scenario rather than let it crowd out every recall and flashcard Question", () => {
+    const questions = composeDueDrill({
+      domainId: "domain-1",
+      maxQuestions: 2,
+      candidates: [
+        candidate({ conceptId: "weak-1", schedule: newlyStudied }),
+        candidate({ conceptId: "weak-2", schedule: newlyStudied }),
+      ],
+    });
+
+    expect(questions).toEqual([
+      { conceptIds: ["weak-1"], type: "recall" },
+      { conceptIds: ["weak-1"], type: "flashcard" },
+    ]);
+  });
+
   it("leaves the scenario out of a single-Question Drill", () => {
     const questions = composeDueDrill({
       domainId: "domain-1",

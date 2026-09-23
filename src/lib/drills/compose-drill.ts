@@ -11,6 +11,7 @@ export type DrillCandidate = {
   conceptId: string;
   /** The Domain the Concept's Subject belongs to. */
   domainId: string;
+  /** The Concept's Subject, which a scenario tries to vary. */
   subjectId: string;
   /** null for a Concept that has never been scheduled. */
   schedule: ReviewScheduleState | null;
@@ -92,6 +93,26 @@ function scenarioConceptIds(ranked: DrillCandidate[]): string[] {
   return ranked.filter((candidate) => chosen.has(candidate)).map((candidate) => candidate.conceptId);
 }
 
+/** Recall and flashcard Questions for the ranked Concepts, as many as fit the room. */
+function perConceptQuestions(
+  ranked: { candidate: DrillCandidate; strength: ConceptStrength }[],
+  room: number,
+): ComposedQuestion[] {
+  const questions: ComposedQuestion[] = [];
+  for (const { candidate, strength } of ranked) {
+    const types = QUESTION_TYPES_BY_STRENGTH[strength];
+    // A Concept is included whole or not at all, so a Drill never stops
+    // mid-Concept when it runs out of room.
+    if (questions.length + types.length > room) {
+      break;
+    }
+    for (const type of types) {
+      questions.push({ conceptIds: [candidate.conceptId], type });
+    }
+  }
+  return questions;
+}
+
 /**
  * Decides which due Concepts a Drill covers and with what mix of Question
  * types. Pure: the caller supplies the due Concepts and turns the result into
@@ -102,9 +123,10 @@ function scenarioConceptIds(ranked: DrillCandidate[]): string[] {
  * (ADR 0001).
  *
  * Where two or more Concepts are due, the Drill closes with one scenario
- * Question combining some of them, after the recall and flashcard Questions.
- * Its slot is kept back from the per-Concept Questions, except in a
- * single-Question Drill, which has no room for both.
+ * Question combining some of them, after the recall and flashcard Questions
+ * (ADR 0008).
+ * Its slot is kept back from the per-Concept Questions, unless that would
+ * leave room for none of them, in which case the scenario is dropped.
  */
 export function composeDueDrill(input: {
   domainId: string;
@@ -129,24 +151,12 @@ export function composeDueDrill(input: {
       return a.candidate.conceptId.localeCompare(b.candidate.conceptId);
     });
 
-  const scenario =
-    maxQuestions > 1 ? scenarioConceptIds(ranked.map(({ candidate }) => candidate)) : [];
-  const perConceptRoom = scenario.length > 0 ? maxQuestions - 1 : maxQuestions;
-
-  const questions: ComposedQuestion[] = [];
-  for (const { candidate, strength } of ranked) {
-    const types = QUESTION_TYPES_BY_STRENGTH[strength];
-    // A Concept is included whole or not at all, so a Drill never stops
-    // mid-Concept when it runs out of room.
-    if (questions.length + types.length > perConceptRoom) {
-      break;
-    }
-    for (const type of types) {
-      questions.push({ conceptIds: [candidate.conceptId], type });
-    }
-  }
+  const scenario = scenarioConceptIds(ranked.map(({ candidate }) => candidate));
   if (scenario.length > 0) {
-    questions.push({ conceptIds: scenario, type: "scenario" });
+    const alongsideScenario = perConceptQuestions(ranked, maxQuestions - 1);
+    if (alongsideScenario.length > 0) {
+      return [...alongsideScenario, { conceptIds: scenario, type: "scenario" }];
+    }
   }
-  return questions;
+  return perConceptQuestions(ranked, maxQuestions);
 }

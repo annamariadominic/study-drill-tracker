@@ -1,6 +1,6 @@
-import type { GeneratedQuestion, GradedAnswer, LlmPort } from "./port";
+import type { GenerateQuestionInput, GeneratedQuestion, GradedAnswer, LlmPort } from "./port";
 
-function defaultGenerateQuestion(input: Parameters<LlmPort["generateQuestion"]>[0]): GeneratedQuestion {
+function defaultGenerateQuestion(input: GenerateQuestionInput): GeneratedQuestion {
   const names = input.concepts.map((concept) => concept.name);
   if (input.type === "scenario") {
     return { type: "scenario", prompt: `Design a system that needs ${names.join(", ")}.` };
@@ -30,9 +30,7 @@ export class FakeLlmPort implements LlmPort {
     private readonly gradeAnswerImpl: LlmPort["gradeAnswer"] = async () => defaultGradeAnswer(),
   ) {}
 
-  async generateQuestion(
-    input: Parameters<LlmPort["generateQuestion"]>[0],
-  ): Promise<GeneratedQuestion> {
+  async generateQuestion(input: GenerateQuestionInput): Promise<GeneratedQuestion> {
     this.generateQuestionCallCount += 1;
     return this.generateQuestionImpl(input);
   }
