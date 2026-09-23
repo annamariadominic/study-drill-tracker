@@ -18,8 +18,11 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const kind = formData.get("kind");
 
+  // Malformed requests get a JSON error; anything a user can reach from the
+  // page (including a page gone stale) redirects back to it with a message.
   let scope: RandomDrillScope;
-  if (kind === "library") {
+  if (kind === null || kind === "library") {
+    // Unscoped means the whole library.
     scope = { kind: "library" };
   } else if (kind === "subject") {
     const subjectId = getRequiredField(formData, "subjectId");
@@ -53,11 +56,8 @@ export async function POST(request: NextRequest) {
       status: 303,
     });
   } catch (error) {
-    if (error instanceof NotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 });
-    }
-    if (error instanceof ConceptNotStudiedError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (error instanceof NotFoundError || error instanceof ConceptNotStudiedError) {
+      return redirectWithError(request, "scope-changed");
     }
     if (error instanceof NoStudiedConceptsError) {
       return redirectWithError(request, "nothing-studied");

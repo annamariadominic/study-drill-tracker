@@ -44,6 +44,17 @@ const QUESTION_TYPES_BY_STRENGTH: Record<ConceptStrength, QuestionType[]> = {
 
 const STRENGTH_ORDER: ConceptStrength[] = ["weak", "developing", "strong"];
 
+/**
+ * A question limit that leaves room for every one of this many Concepts, at
+ * whatever strength, plus the scenario that closes the Drill.
+ */
+export function roomForEveryConcept(conceptCount: number): number {
+  const mostPerConcept = Math.max(
+    ...Object.values(QUESTION_TYPES_BY_STRENGTH).map((types) => types.length),
+  );
+  return conceptCount * mostPerConcept + 1;
+}
+
 export function conceptStrength(schedule: ReviewScheduleState | null): ConceptStrength {
   if (schedule === null) {
     return "weak";

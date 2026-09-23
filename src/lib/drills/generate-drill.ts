@@ -3,18 +3,11 @@ import { questionFieldsFromGenerated } from "@/lib/questions/from-generated";
 import type { QuestionsRepository } from "@/lib/questions/repository";
 import { scheduleFromFields } from "@/lib/study/scheduling";
 import { NotFoundError } from "@/lib/syllabus/errors";
-import type { Concept, Domain, Subject } from "@/lib/syllabus/types";
+import type { StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
 import { composeDrill } from "./compose-drill";
 import { DrillGenerationError } from "./errors";
 import type { CreateDrillInput, DrillsRepository } from "./repository";
 import type { Drill } from "./types";
-
-/** A Concept a Drill may draw on, with the Subject and Domain it sits in. */
-export type DrillConcept = {
-  concept: Concept;
-  subject: Subject;
-  domain: Domain;
-};
 
 /**
  * Generates a Drill over the given Concepts, whatever scope they were drawn
@@ -32,7 +25,7 @@ export async function generateDrill(
     questionsRepo: QuestionsRepository;
     llmPort: LlmPort;
   },
-  input: CreateDrillInput & { concepts: DrillConcept[]; maxQuestions?: number },
+  input: CreateDrillInput & { concepts: StudiedConcept[]; maxQuestions?: number },
 ): Promise<Drill | null> {
   const conceptsById = new Map(input.concepts.map(({ concept }) => [concept.id, concept]));
 

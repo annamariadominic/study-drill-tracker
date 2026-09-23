@@ -124,6 +124,22 @@ describe("startRandomDrill", () => {
     });
   });
 
+  it("asks about every hand-picked Concept, even past the usual question limit", async () => {
+    const deps = buildDeps();
+    const domain = await deps.syllabusRepo.createDomain({ name: "Software Engineering" });
+    const subject = await deps.syllabusRepo.createSubject(domain.id, { name: "System Design" });
+    const picked: string[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      const concept = await deps.syllabusRepo.createConcept(subject.id, { name: `Concept ${index}` });
+      await deps.syllabusRepo.setConceptStatus(concept.id, "studied");
+      picked.push(concept.id);
+    }
+
+    const drill = await startRandomDrill(deps, { scope: { kind: "concepts", conceptIds: picked } });
+
+    expect(await drillConceptIds(deps, drill.id)).toEqual(new Set(picked));
+  });
+
   it("refuses hand-picked Concepts from different Domains, persisting nothing", async () => {
     const deps = buildDeps();
     const software = await deps.syllabusRepo.createDomain({ name: "Software Engineering" });

@@ -2,10 +2,11 @@ import type { LlmPort } from "@/lib/llm/port";
 import type { QuestionsRepository } from "@/lib/questions/repository";
 import { ConceptNotStudiedError } from "@/lib/study/errors";
 import { NotFoundError } from "@/lib/syllabus/errors";
-import { listStudiedConcepts } from "@/lib/syllabus/list-studied-concepts";
+import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
 import { MixedDomainsError, NoStudiedConceptsError } from "./errors";
-import { generateDrill, type DrillConcept } from "./generate-drill";
+import { DEFAULT_MAX_QUESTIONS, roomForEveryConcept } from "./compose-drill";
+import { generateDrill } from "./generate-drill";
 import type { DrillsRepository } from "./repository";
 import type { Drill, RandomDrillScope } from "./types";
 
@@ -20,16 +21,16 @@ async function conceptsInScope(
   syllabusRepo: SyllabusRepository,
   scope: RandomDrillScope,
   random: () => number,
-): Promise<{ domainId: string; concepts: DrillConcept[] }> {
+): Promise<{ domainId: string; concepts: StudiedConcept[] }> {
   const studied = await listStudiedConcepts(syllabusRepo);
 
-  let concepts: DrillConcept[];
+  let concepts: StudiedConcept[];
   switch (scope.kind) {
     case "library": {
       if (studied.length === 0) {
         throw new NoStudiedConceptsError();
       }
-      const drawn = studied[Math.floor(random() * studied.length)];
+      const drawn = studied[Math.min(Math.floor(random() * studied.length), studied.length - 1)];
       concepts = studied.filter(({ domain }) => domain.id === drawn.domain.id);
       break;
     }
@@ -96,12 +97,16 @@ export async function startRandomDrill(
     input.random ?? Math.random,
   );
 
+  const maxQuestions = input.maxQuestions ?? DEFAULT_MAX_QUESTIONS;
   const drill = await generateDrill(deps, {
     domainId,
     scope: "random",
     scopeDetail: scope,
     concepts,
-    maxQuestions: input.maxQuestions,
+    // Hand-picked Concepts were each chosen to be drilled, so none is left
+    // out for want of room, however many were picked.
+    maxQuestions:
+      scope.kind === "concepts" ? Math.max(maxQuestions, roomForEveryConcept(concepts.length)) : maxQuestions,
   });
 
   if (!drill) {

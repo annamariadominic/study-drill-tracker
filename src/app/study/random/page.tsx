@@ -6,6 +6,7 @@ const ERRORS: Record<string, string> = {
   "drill-generation-failed": "Couldn't generate a Drill right now. Please try again.",
   "nothing-studied": "There's nothing studied to drill there yet.",
   "no-concepts-picked": "Pick at least one Concept to drill.",
+  "scope-changed": "Something you picked has changed since this page loaded. Please pick again.",
   "mixed-domains": "A Drill stays within one Domain, so pick Concepts from a single Domain.",
 };
 

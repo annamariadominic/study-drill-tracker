@@ -16,7 +16,7 @@ The atomic unit of study within a Subject (e.g. queues, retries, idempotency, ca
 _Avoid_: Topic.
 
 **Drill**:
-A generated review session made of multiple Questions, created on demand (never pre-authored or stored as a bank). Stays within a single Domain. Drawn either from the due-list (Concepts whose review schedule says they're due) or requested ad hoc, optionally scoped to the whole library, a single Subject, or hand-picked Concepts. An ad hoc (random) Drill over the whole library still draws just one Domain to stay in (see ADR 0009).
+A generated review session made of multiple Questions, created on demand (never pre-authored or stored as a bank). Stays within a single Domain. Drawn either from the due-list (Concepts whose review schedule says they're due) or started on demand as a **random Drill**, optionally scoped to the whole library, a single Subject, or hand-picked Concepts. A random Drill over the whole library still draws just one Domain to stay in (see ADR 0009).
 
 **Question**:
 A single item within a Drill. Comes in three kinds:
@@ -34,4 +34,4 @@ The graded outcome of an Attempt: **correct**, **partial**, or **incorrect**. Fl
 A self-reported rating on an Attempt, one of **guessed**, **partial**, or **confident**. Submitted at the same time as the answer, before Correctness is revealed, so it isn't biased by already knowing the grade.
 
 **Review schedule**:
-Per-Concept spaced-repetition state that determines when a Concept next becomes due. Updated from Attempts on that Concept, in any Drill (scheduled or ad hoc), using both Correctness and Confidence as input. A Drill advances a Concept's schedule at most once, even where it asks about that Concept more than once: the first recall Attempt is the signal where the Drill has one, otherwise the first Attempt on whatever it does ask (see ADR 0006).
+Per-Concept spaced-repetition state that determines when a Concept next becomes due. Updated from Attempts on that Concept, in any Drill (due or random), using both Correctness and Confidence as input. A Drill advances a Concept's schedule at most once, even where it asks about that Concept more than once: the first recall Attempt is the signal where the Drill has one, otherwise the first Attempt on whatever it does ask (see ADR 0006).
