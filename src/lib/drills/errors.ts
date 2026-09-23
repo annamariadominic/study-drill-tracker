@@ -12,3 +12,17 @@ export class DrillGenerationError extends Error {
     this.name = "DrillGenerationError";
   }
 }
+
+export class NoStudiedConceptsError extends Error {
+  constructor() {
+    super("There are no studied Concepts to drill in that scope");
+    this.name = "NoStudiedConceptsError";
+  }
+}
+
+export class MixedDomainsError extends Error {
+  constructor(domainIds: string[]) {
+    super(`A Drill can't combine Concepts from different Domains: ${domainIds.join(", ")}`);
+    this.name = "MixedDomainsError";
+  }
+}

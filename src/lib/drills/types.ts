@@ -1,8 +1,14 @@
 /**
- * Only due-scoped Drills exist so far; the ad-hoc scopes described in
- * CONTEXT.md (library, Subject, hand-picked Concepts) aren't built yet.
+ * A Drill is drawn either from the due-list or at random on demand, scoped to
+ * the whole library, one Subject, or hand-picked Concepts (see RandomDrillScope).
  */
-export type DrillScope = "due";
+export type DrillScope = "due" | "random";
+
+/** What a random Drill draws its Concepts from, stored as its scope detail. */
+export type RandomDrillScope =
+  | { kind: "library" }
+  | { kind: "subject"; subjectId: string }
+  | { kind: "concepts"; conceptIds: string[] };
 
 export type Drill = {
   id: string;
