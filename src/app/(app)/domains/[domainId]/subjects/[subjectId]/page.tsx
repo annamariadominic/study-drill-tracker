@@ -135,6 +135,7 @@ export default async function SubjectPage({
                     <input type="hidden" name="domainId" value={domain.id} />
                     <input type="hidden" name="subjectId" value={subject.id} />
                     <input type="hidden" name="status" value={studied ? "planned" : "studied"} />
+                    {show ? <input type="hidden" name="show" value={show} /> : null}
                     <Button
                       type="submit"
                       size="sm"

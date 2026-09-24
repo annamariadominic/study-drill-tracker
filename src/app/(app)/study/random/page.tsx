@@ -26,9 +26,6 @@ const SCOPES: { value: Scope; label: string; description: string }[] = [
   { value: "concepts", label: "Hand-picked", description: "Exactly the Concepts you tick, all from one Domain." },
 ];
 
-/** Errors about picking Concepts send you back to that tab rather than the default one. */
-const CONCEPT_ERRORS = new Set(["no-concepts-picked", "mixed-domains", "scope-changed"]);
-
 type SubjectGroup = { id: string; name: string; studied: StudiedConcept[] };
 type DomainGroup = { id: string; name: string; subjects: SubjectGroup[] };
 
@@ -58,11 +55,8 @@ export default async function RandomDrillPage({
   searchParams: Promise<{ error?: string; scope?: string }>;
 }) {
   const { error, scope: scopeParam } = await searchParams;
-  const scope: Scope = SCOPES.some(({ value }) => value === scopeParam)
-    ? (scopeParam as Scope)
-    : error && CONCEPT_ERRORS.has(error)
-      ? "concepts"
-      : "library";
+  // Errors come back with the scope they were submitted from, so they land on that form.
+  const scope: Scope = SCOPES.some(({ value }) => value === scopeParam) ? (scopeParam as Scope) : "library";
   const library = groupLibrary(await listStudiedConcepts(getSyllabusRepository()));
 
   return (

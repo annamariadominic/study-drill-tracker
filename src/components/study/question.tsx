@@ -132,7 +132,8 @@ export function AttemptFeedback({
   /** What to do next, e.g. the next-question button. */
   next?: ReactNode;
 }) {
-  const options = question.type === "flashcard" ? question.options : null;
+  const isFlashcard = question.type === "flashcard";
+  const correctOption = isFlashcard ? (question.options?.[question.correctOptionIndex ?? -1] ?? null) : null;
 
   return (
     <section aria-labelledby="result-heading" className="flex flex-col gap-8">
@@ -144,12 +145,8 @@ export function AttemptFeedback({
         <p className="text-xs text-muted">Your confidence: {CONFIDENCE_LABEL[attempt.confidence]}</p>
       </div>
 
-      {options ? (
-        <FlashcardReview
-          options={options}
-          correctIndex={question.correctOptionIndex}
-          chosen={attempt.submittedAnswer}
-        />
+      {isFlashcard ? (
+        <FlashcardReview attempt={attempt} correctOption={correctOption} />
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-muted">Your answer</p>
@@ -171,54 +168,41 @@ export function AttemptFeedback({
   );
 }
 
-function FlashcardReview({
-  options,
-  correctIndex,
-  chosen,
-}: {
-  options: string[];
-  correctIndex: number | null;
-  chosen: string;
-}) {
-  const chosenIndex = options.indexOf(chosen);
+/**
+ * The learner's answer and the correct one, each stated in full. The answer is
+ * the text that was submitted and the correct one comes from its stored index,
+ * so neither depends on matching option text (which may repeat).
+ */
+function FlashcardReview({ attempt, correctOption }: { attempt: Attempt; correctOption: string | null }) {
+  const answeredCorrectly = attempt.correctness === "correct";
   return (
-    <ol className="flex flex-col gap-2" aria-label="Answer options">
-      {options.map((option, index) => {
-        const isCorrect = index === correctIndex;
-        const isChosen = index === chosenIndex;
-        return (
-          <li
-            key={index}
-            className={cn(
-              "flex items-start gap-3 rounded-control border px-4 py-3 text-sm",
-              isCorrect
-                ? "border-correct/50 bg-correct-wash text-text"
-                : isChosen
-                  ? "border-incorrect/50 bg-incorrect-wash text-text"
-                  : "border-line text-muted",
-            )}
-          >
-            <span
-              aria-hidden
-              className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-[3px] border border-line-strong text-[0.6875rem] font-semibold"
-            >
-              {String.fromCharCode(65 + index)}
-            </span>
-            <span className="flex-1 leading-6">{option}</span>
-            {isCorrect || isChosen ? (
-              <span
-                className={cn(
-                  "flex shrink-0 items-center gap-1 text-xs font-medium",
-                  isCorrect ? "text-correct" : "text-incorrect",
-                )}
-              >
-                {isCorrect ? <Check aria-hidden className="size-3.5" /> : <X aria-hidden className="size-3.5" />}
-                {isCorrect && isChosen ? "Your answer, correct" : isCorrect ? "Correct answer" : "Your answer"}
-              </span>
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
+    <dl className="flex flex-col gap-2">
+      <div
+        className={cn(
+          "flex flex-col gap-1 rounded-control border px-4 py-3",
+          answeredCorrectly ? "border-correct/50 bg-correct-wash" : "border-incorrect/50 bg-incorrect-wash",
+        )}
+      >
+        <dt
+          className={cn(
+            "flex items-center gap-1 text-xs font-medium",
+            answeredCorrectly ? "text-correct" : "text-incorrect",
+          )}
+        >
+          {answeredCorrectly ? <Check aria-hidden className="size-3.5" /> : <X aria-hidden className="size-3.5" />}
+          Your answer
+        </dt>
+        <dd className="text-sm leading-6 text-text">{attempt.submittedAnswer}</dd>
+      </div>
+      {correctOption !== null ? (
+        <div className="flex flex-col gap-1 rounded-control border border-line px-4 py-3">
+          <dt className="flex items-center gap-1 text-xs font-medium text-correct">
+            <Check aria-hidden className="size-3.5" />
+            Correct answer
+          </dt>
+          <dd className="text-sm leading-6 text-text">{correctOption}</dd>
+        </div>
+      ) : null}
+    </dl>
   );
 }

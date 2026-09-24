@@ -49,22 +49,28 @@ export function PendingSubmit({
   }, []);
 
   return (
-    <button
-      ref={ref}
-      type="submit"
-      disabled={pending}
-      aria-disabled={pending}
-      className={cn(buttonVariants({ variant, size }), pending && "disabled:opacity-80", className)}
-      {...props}
-    >
-      {pending ? (
-        <>
-          <LoaderCircle className="animate-spin" aria-hidden />
-          <span role="status">{pendingLabel}</span>
-        </>
-      ) : (
-        children
-      )}
-    </button>
+    <>
+      <button
+        ref={ref}
+        type="submit"
+        disabled={pending}
+        aria-disabled={pending}
+        className={cn(buttonVariants({ variant, size }), pending && "disabled:opacity-80", className)}
+        {...props}
+      >
+        {pending ? (
+          <>
+            <LoaderCircle className="animate-spin" aria-hidden />
+            {pendingLabel}
+          </>
+        ) : (
+          children
+        )}
+      </button>
+      {/* Mounted from the start so screen readers announce the change when it fills in. */}
+      <span role="status" className="sr-only">
+        {pending ? pendingLabel : null}
+      </span>
+    </>
   );
 }
