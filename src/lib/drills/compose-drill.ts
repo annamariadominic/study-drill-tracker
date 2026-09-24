@@ -44,6 +44,17 @@ const QUESTION_TYPES_BY_STRENGTH: Record<ConceptStrength, QuestionType[]> = {
 
 const STRENGTH_ORDER: ConceptStrength[] = ["weak", "developing", "strong"];
 
+/**
+ * A question limit that leaves room for every one of this many Concepts, at
+ * whatever strength, plus the scenario that closes the Drill.
+ */
+export function roomForEveryConcept(conceptCount: number): number {
+  const mostPerConcept = Math.max(
+    ...Object.values(QUESTION_TYPES_BY_STRENGTH).map((types) => types.length),
+  );
+  return conceptCount * mostPerConcept + 1;
+}
+
 export function conceptStrength(schedule: ReviewScheduleState | null): ConceptStrength {
   if (schedule === null) {
     return "weak";
@@ -114,21 +125,21 @@ function perConceptQuestions(
 }
 
 /**
- * Decides which due Concepts a Drill covers and with what mix of Question
- * types. Pure: the caller supplies the due Concepts and turns the result into
- * actual Questions.
+ * Decides which Concepts a Drill covers and with what mix of Question types.
+ * Pure: the caller supplies the candidate Concepts (the due-list, or whatever
+ * a random Drill is scoped to) and turns the result into actual Questions.
  *
  * Concepts outside the Drill's Domain are dropped before anything is chosen,
  * since a Drill — and so every scenario in it — stays within one Domain
  * (ADR 0001).
  *
- * Where two or more Concepts are due, the Drill closes with one scenario
+ * Where there are two or more candidates, the Drill closes with one scenario
  * Question combining some of them, after the recall and flashcard Questions
  * (ADR 0008).
  * Its slot is kept back from the per-Concept Questions, unless that would
  * leave room for none of them, in which case the scenario is dropped.
  */
-export function composeDueDrill(input: {
+export function composeDrill(input: {
   domainId: string;
   candidates: DrillCandidate[];
   maxQuestions?: number;
