@@ -22,9 +22,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, useTransition, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { InlineAlert } from "./feedback";
+import { RowList } from "./list";
 
 export type SortableItem = {
   id: string;
@@ -38,19 +39,20 @@ const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 /**
  * A hairline list whose rows can be dragged into a new order by a handle, with
  * the pointer or the keyboard. Each new order is sent to `saveUrl` as
- * `{ [field]: ids }` and the page's server data refreshed; if the save fails,
+ * `{ [idsKey]: ids }` and the page's server data refreshed; if the save fails,
  * the list goes back to the order last saved on the server.
  */
 export function SortableList({
   items,
   saveUrl,
-  field,
+  idsKey,
   className,
   itemClassName,
 }: {
   items: SortableItem[];
   saveUrl: string;
-  field: string;
+  /** The request-body key the ordered ids are sent under. */
+  idsKey: string;
   className?: string;
   itemClassName?: string;
 }) {
@@ -60,7 +62,8 @@ export function SortableList({
   const [order, setOrder] = useState(serverOrder);
   const [lastServerOrder, setLastServerOrder] = useState(serverOrder);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(false);
+  const [refreshing, startRefresh] = useTransition();
+  const [saveFailed, setSaveFailed] = useState(false);
 
   // Take up the server's order whenever it changes, e.g. after a refresh.
   if (serverOrder.join() !== lastServerOrder.join()) {
@@ -91,33 +94,34 @@ export function SortableList({
     if (!over || active.id === over.id) {
       return;
     }
-    const previous = order;
     const next = arrayMove(order, order.indexOf(String(active.id)), order.indexOf(String(over.id)));
     setOrder(next);
     setSaving(true);
-    setError(false);
+    setSaveFailed(false);
     try {
       const response = await fetch(saveUrl, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ [field]: next }),
+        body: JSON.stringify({ [idsKey]: next }),
       });
       // Anything but 204 (including a redirect to /login) means it wasn't saved.
       if (response.status !== 204) {
         throw new Error(`Saving the order failed: ${response.status}`);
       }
     } catch {
-      setOrder(previous);
-      setError(true);
+      setOrder(lastServerOrder);
+      setSaveFailed(true);
     } finally {
       setSaving(false);
-      router.refresh();
+      // Rows stay locked until the refreshed order arrives, so a late refresh
+      // can't overwrite a newer drag.
+      startRefresh(() => router.refresh());
     }
   }
 
   return (
     <>
-      {error ? <InlineAlert className="mb-4">Couldn&apos;t save the new order. Please try again.</InlineAlert> : null}
+      {saveFailed ? <InlineAlert className="mb-4">Couldn&apos;t save the new order. Please try again.</InlineAlert> : null}
       <DndContext
         id={contextId}
         sensors={sensors}
@@ -133,11 +137,11 @@ export function SortableList({
         onDragEnd={onDragEnd}
       >
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
-          <ul className={cn("divide-y divide-line border-b border-line", className)}>
+          <RowList className={className}>
             {shown.map((item) => (
-              <SortableRow key={item.id} item={item} disabled={saving} className={itemClassName} />
+              <SortableRow key={item.id} item={item} disabled={saving || refreshing} className={itemClassName} />
             ))}
-          </ul>
+          </RowList>
         </SortableContext>
       </DndContext>
     </>

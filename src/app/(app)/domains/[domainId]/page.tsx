@@ -55,7 +55,7 @@ export default async function DomainPage({
         ) : (
           <SortableList
             saveUrl={`/api/domains/${domain.id}/subjects/order`}
-            field="subjectIds"
+            idsKey="subjectIds"
             items={subjects.map((subject) => ({
               id: subject.id,
               label: subject.name,

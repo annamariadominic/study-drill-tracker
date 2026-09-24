@@ -19,6 +19,8 @@ type ConceptRow = {
   next_review_due_at: string | null;
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function toDomain(row: DomainRow): Domain {
   return { id: row.id, name: row.name, createdAt: row.created_at };
 }
@@ -147,6 +149,9 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async reorderSubjects(domainId: string, subjectIds: string[]): Promise<void> {
+    // Checked here so a malformed Domain id reads as not found, rather than as
+    // the invalid-uuid error (22P02) a malformed Subject id gets below.
+    if (!UUID.test(domainId)) throw new NotFoundError("Domain", domainId);
     // The reorder_subjects function validates and rewrites in one transaction.
     const { error } = await this.client.rpc("reorder_subjects", {
       target_domain_id: domainId,
