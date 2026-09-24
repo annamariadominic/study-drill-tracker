@@ -233,5 +233,89 @@ describe("FakeSyllabusRepository", () => {
         NotFoundError,
       );
     });
+
+    describe("ordering", () => {
+      async function seed() {
+        const domain = await repo.createDomain({ name: "Software Engineering" });
+        const subject = await repo.createSubject(domain.id, { name: "System Design" });
+        const queues = await repo.createConcept(subject.id, { name: "Queues" });
+        const retries = await repo.createConcept(subject.id, { name: "Retries" });
+        const idempotency = await repo.createConcept(subject.id, { name: "Idempotency" });
+        return { domain, subject, queues, retries, idempotency };
+      }
+
+      async function names(subjectId: string) {
+        return (await repo.listConcepts(subjectId)).map((concept) => concept.name);
+      }
+
+      it("persists a reorder and lists Concepts in the new order", async () => {
+        const { subject, queues, retries, idempotency } = await seed();
+
+        await repo.reorderConcepts(subject.id, [idempotency.id, queues.id, retries.id]);
+
+        expect(await names(subject.id)).toEqual(["Idempotency", "Queues", "Retries"]);
+      });
+
+      it("adds a new Concept to the bottom of a reordered list", async () => {
+        const { subject, queues, retries, idempotency } = await seed();
+        await repo.reorderConcepts(subject.id, [idempotency.id, retries.id, queues.id]);
+
+        await repo.createConcept(subject.id, { name: "Backpressure" });
+
+        expect(await names(subject.id)).toEqual(["Idempotency", "Retries", "Queues", "Backpressure"]);
+      });
+
+      it("changes only the order, never a Concept's status or review schedule", async () => {
+        const { subject, queues, retries, idempotency } = await seed();
+        await repo.setConceptStatus(retries.id, "studied");
+        await repo.updateConceptReviewSchedule(retries.id, {
+          intervalDays: 6,
+          easeFactor: 2.36,
+          nextDueAt: "2026-10-01T08:00:00.000Z",
+        });
+        const before = await repo.getConcept(retries.id);
+
+        await repo.reorderConcepts(subject.id, [retries.id, idempotency.id, queues.id]);
+
+        expect(await repo.getConcept(retries.id)).toEqual({ ...before, position: 0 });
+        expect((await repo.getConcept(queues.id))?.status).toBe("planned");
+      });
+
+      it.each([
+        ["a Concept is missing", (ids: string[]) => ids.slice(1)],
+        ["a Concept is repeated", (ids: string[]) => [ids[0], ...ids]],
+        ["a Concept is repeated in place of another", (ids: string[]) => [ids[0], ids[0], ids[2]]],
+        ["an unknown id is included", (ids: string[]) => [...ids, "missing"]],
+      ])("rejects the order and changes nothing when %s", async (_case, mangle) => {
+        const { subject, queues, retries, idempotency } = await seed();
+        const before = await names(subject.id);
+
+        await expect(
+          repo.reorderConcepts(subject.id, mangle([idempotency.id, queues.id, retries.id])),
+        ).rejects.toThrow(InvalidOrderError);
+
+        expect(await names(subject.id)).toEqual(before);
+      });
+
+      it("rejects a Concept from another Subject and changes neither Subject", async () => {
+        const { domain, subject, queues, retries, idempotency } = await seed();
+        const other = await repo.createSubject(domain.id, { name: "API Design" });
+        const pagination = await repo.createConcept(other.id, { name: "Pagination" });
+
+        await expect(
+          repo.reorderConcepts(subject.id, [pagination.id, queues.id, retries.id]),
+        ).rejects.toThrow(InvalidOrderError);
+        await expect(
+          repo.reorderConcepts(subject.id, [idempotency.id, queues.id, retries.id, pagination.id]),
+        ).rejects.toThrow(InvalidOrderError);
+
+        expect(await names(subject.id)).toEqual(["Queues", "Retries", "Idempotency"]);
+        expect((await repo.listConcepts(other.id)).map((concept) => concept.position)).toEqual([0]);
+      });
+
+      it("throws NotFoundError when reordering a missing Subject", async () => {
+        await expect(repo.reorderConcepts("missing", [])).rejects.toThrow(NotFoundError);
+      });
+    });
   });
 });
