@@ -22,6 +22,24 @@ type ConceptRow = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Each ordered sibling list: its table, the parent it's scoped to, and its reorder function. */
+const ORDERED_LISTS = {
+  subjects: {
+    parent: "Domain",
+    parentColumn: "domain_id",
+    reorderFn: "reorder_subjects",
+    reorderArgs: (parentId: string, ids: string[]) => ({ target_domain_id: parentId, subject_ids: ids }),
+  },
+  concepts: {
+    parent: "Subject",
+    parentColumn: "subject_id",
+    reorderFn: "reorder_concepts",
+    reorderArgs: (parentId: string, ids: string[]) => ({ target_subject_id: parentId, concept_ids: ids }),
+  },
+} as const;
+
+type OrderedList = keyof typeof ORDERED_LISTS;
+
 function toDomain(row: DomainRow): Domain {
   return { id: row.id, name: row.name, createdAt: row.created_at };
 }
@@ -117,21 +135,10 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async createSubject(domainId: string, input: { name: string }): Promise<Subject> {
-    // A new Subject goes to the bottom of its Domain's list. Two creates racing
-    // on one Domain would collide on the (domain_id, position) constraint and
-    // one would fail, rather than store a duplicate position.
-    const { data: last, error: lastError } = await this.client
-      .from("subjects")
-      .select("position")
-      .eq("domain_id", domainId)
-      .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (lastError) throw lastError;
-
+    const position = await this.nextPosition("subjects", domainId);
     const { data, error } = await this.client
       .from("subjects")
-      .insert({ domain_id: domainId, name: input.name, position: last ? last.position + 1 : 0 })
+      .insert({ domain_id: domainId, name: input.name, position })
       .select()
       .single();
     if (error) throw error;
@@ -151,27 +158,38 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async reorderSubjects(domainId: string, subjectIds: string[]): Promise<void> {
-    await this.reorder("reorder_subjects", { entity: "Domain", id: domainId }, {
-      target_domain_id: domainId,
-      subject_ids: subjectIds,
-    });
+    await this.reorder("subjects", domainId, subjectIds);
   }
 
   /**
-   * Calls one of the reorder_* functions, which validate the sibling list and
-   * rewrite positions in one transaction, and maps their errors.
+   * The position that puts a new item at the bottom of its parent's list. Two
+   * creates racing on one parent would collide on the (parent, position)
+   * constraint and one would fail, rather than store a duplicate position.
    */
-  private async reorder(
-    fn: "reorder_subjects" | "reorder_concepts",
-    parent: { entity: "Domain" | "Subject"; id: string },
-    args: Record<string, unknown>,
-  ): Promise<void> {
+  private async nextPosition(list: OrderedList, parentId: string): Promise<number> {
+    const { data, error } = await this.client
+      .from(list)
+      .select("position")
+      .eq(ORDERED_LISTS[list].parentColumn, parentId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? (data as { position: number }).position + 1 : 0;
+  }
+
+  /**
+   * Calls the list's reorder function, which validates the sibling list and
+   * rewrites positions in one transaction, and maps its errors.
+   */
+  private async reorder(list: OrderedList, parentId: string, ids: string[]): Promise<void> {
+    const { parent, reorderFn, reorderArgs } = ORDERED_LISTS[list];
     // Checked here so a malformed parent id reads as not found, rather than as
     // the invalid-uuid error (22P02) a malformed child id gets below.
-    if (!UUID.test(parent.id)) throw new NotFoundError(parent.entity, parent.id);
-    const { error } = await this.client.rpc(fn, args);
+    if (!UUID.test(parentId)) throw new NotFoundError(parent, parentId);
+    const { error } = await this.client.rpc(reorderFn, reorderArgs(parentId, ids));
     if (!error) return;
-    if (error.code === "P0002") throw new NotFoundError(parent.entity, parent.id);
+    if (error.code === "P0002") throw new NotFoundError(parent, parentId);
     // 22023: not exactly the parent's children; 22P02: an id that isn't a uuid.
     if (error.code === "22023" || error.code === "22P02") throw new InvalidOrderError(error.message);
     throw error;
@@ -201,26 +219,10 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
     subjectId: string,
     input: { name: string; notes?: string | null },
   ): Promise<Concept> {
-    // A new Concept goes to the bottom of its Subject's list. Two creates racing
-    // on one Subject would collide on the (subject_id, position) constraint and
-    // one would fail, rather than store a duplicate position.
-    const { data: last, error: lastError } = await this.client
-      .from("concepts")
-      .select("position")
-      .eq("subject_id", subjectId)
-      .order("position", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (lastError) throw lastError;
-
+    const position = await this.nextPosition("concepts", subjectId);
     const { data, error } = await this.client
       .from("concepts")
-      .insert({
-        subject_id: subjectId,
-        name: input.name,
-        notes: input.notes ?? null,
-        position: last ? last.position + 1 : 0,
-      })
+      .insert({ subject_id: subjectId, name: input.name, notes: input.notes ?? null, position })
       .select()
       .single();
     if (error) throw error;
@@ -267,10 +269,7 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async reorderConcepts(subjectId: string, conceptIds: string[]): Promise<void> {
-    await this.reorder("reorder_concepts", { entity: "Subject", id: subjectId }, {
-      target_subject_id: subjectId,
-      concept_ids: conceptIds,
-    });
+    await this.reorder("concepts", subjectId, conceptIds);
   }
 
   async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {
