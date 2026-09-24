@@ -11,7 +11,7 @@ export function MobileNav({ domains }: { domains: NavDomain[] }) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="-mr-2 flex size-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-text">
+      <SheetTrigger className="flex size-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface hover:text-text">
         <Menu aria-hidden className="size-5" />
         <span className="sr-only">Open menu</span>
       </SheetTrigger>

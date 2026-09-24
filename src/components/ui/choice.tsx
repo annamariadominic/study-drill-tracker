@@ -91,7 +91,7 @@ export function ChoiceLetter({ index }: { index: number }) {
   return (
     <span
       aria-hidden
-      className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-[3px] border border-line-strong text-[0.6875rem] font-semibold text-muted transition-colors group-has-checked:border-accent group-has-checked:bg-accent group-has-checked:text-accent-ink"
+      className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-[3px] border border-line-control text-[0.6875rem] font-semibold text-muted transition-colors group-has-checked:border-accent group-has-checked:bg-accent group-has-checked:text-accent-ink"
     >
       {String.fromCharCode(65 + index)}
     </span>
@@ -103,7 +103,7 @@ function ChoiceIndicator({ type }: { type: "radio" | "checkbox" }) {
     return (
       <span
         aria-hidden
-        className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-line-strong transition-colors group-has-checked:border-accent group-has-checked:bg-accent group-has-checked:text-accent-ink [&_svg]:opacity-0 group-has-checked:[&_svg]:opacity-100"
+        className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-line-control transition-colors group-has-checked:border-accent group-has-checked:bg-accent group-has-checked:text-accent-ink [&_svg]:opacity-0 group-has-checked:[&_svg]:opacity-100"
       >
         <Check className="size-3" strokeWidth={3} />
       </span>
@@ -112,7 +112,7 @@ function ChoiceIndicator({ type }: { type: "radio" | "checkbox" }) {
   return (
     <span
       aria-hidden
-      className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border border-line-strong transition-colors group-has-checked:border-accent after:size-2 after:rounded-full after:bg-accent after:opacity-0 after:transition-opacity group-has-checked:after:opacity-100"
+      className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border border-line-control transition-colors group-has-checked:border-accent after:size-2 after:rounded-full after:bg-accent after:opacity-0 after:transition-opacity group-has-checked:after:opacity-100"
     />
   );
 }

@@ -12,9 +12,11 @@
   --surface-raised: #1d2730;
   --line: #26313a;
   --line-strong: #3a4753;
+  /* Borders of small controls (radio, checkbox), kept at 3:1 against the page. */
+  --line-control: #616e7a;
   --text: #e6e3da;
   --text-muted: #9aa3ab;
-  --text-faint: #7b858e;
+  --text-faint: #838d96;
   --accent: #a3aef0;
   --accent-strong: #c1c8f6;
   --accent-ink: #141a33;
@@ -34,6 +36,7 @@
   --color-surface-raised: var(--surface-raised);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-line-control: var(--line-control);
   --color-text: var(--text);
   --color-muted: var(--text-muted);
   --color-faint: var(--text-faint);
