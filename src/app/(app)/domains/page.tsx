@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { EmptyState, InlineAlert } from "@/components/ui/feedback";
+import { AddRow, RowLink, RowList } from "@/components/ui/list";
+import { PageHeader, SectionHeading } from "@/components/ui/page-header";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
 export default async function DomainsPage({
@@ -10,27 +12,34 @@ export default async function DomainsPage({
   const domains = await getSyllabusRepository().listDomains();
 
   return (
-    <main style={{ maxWidth: 480, margin: "4rem auto", padding: "0 1rem" }}>
-      <h1>Domains</h1>
+    <>
+      <PageHeader
+        title="Syllabus"
+        description="Everything you're learning, organised as Domains, then Subjects, then the Concepts inside them."
+      />
 
-      {domains.length === 0 ? (
-        <p>No Domains yet.</p>
-      ) : (
-        <ul>
-          {domains.map((domain) => (
-            <li key={domain.id}>
-              <Link href={`/domains/${domain.id}`}>{domain.name}</Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      {error === "domain-name" ? <InlineAlert className="mb-6">Domain name can&apos;t be empty.</InlineAlert> : null}
 
-      <h2>New Domain</h2>
-      <form method="post" action="/api/domains" style={{ display: "flex", gap: "0.5rem" }}>
-        <input name="name" placeholder="e.g. Software Engineering" required />
-        <button type="submit">Create</button>
-      </form>
-      {error === "domain-name" ? <p role="alert">Domain name can&apos;t be empty.</p> : null}
-    </main>
+      <section aria-labelledby="domains-heading">
+        <SectionHeading id="domains-heading" count={domains.length}>
+          Domains
+        </SectionHeading>
+        {domains.length === 0 ? (
+          <EmptyState title="No Domains yet">
+            A Domain is the broadest grouping, like Software Engineering. Add your first one below.
+          </EmptyState>
+        ) : (
+          <RowList>
+            {domains.map((domain) => (
+              <RowLink key={domain.id} href={`/domains/${domain.id}`}>
+                {domain.name}
+              </RowLink>
+            ))}
+          </RowList>
+        )}
+
+        <AddRow action="/api/domains" label="New Domain" placeholder="e.g. Software Engineering" buttonLabel="Add Domain" />
+      </section>
+    </>
   );
 }
