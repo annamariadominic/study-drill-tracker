@@ -1,40 +1,22 @@
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { conceptList, DrillFrame, DrillResults } from "@/components/study/drill";
+import { AnswerForm, AttemptFeedback, QuestionPrompt } from "@/components/study/question";
+import { buttonVariants } from "@/components/ui/button";
 import { getDrillsRepository } from "@/lib/drills/get-repository";
 import { drillConceptNames, loadDrill } from "@/lib/drills/load-drill";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import type { Question } from "@/lib/questions/types";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
+import { cn } from "@/lib/utils";
 
-/** The names of the Concepts a Question asks about, in the order it presents them. */
-function conceptList(question: Question, conceptNames: Map<string, string>, separator: string) {
-  return question.conceptIds.map((conceptId) => conceptNames.get(conceptId)).join(separator);
-}
-
-/**
- * Marks a scenario Question as testing several Concepts at once, naming them.
- * Other Questions ask about one Concept and get no label.
- */
-async function ScenarioLabel({ question }: { question: Question }) {
+/** Only a scenario names its Concepts while it's asked; the others ask about one and give no hint. */
+async function scenarioConcepts(question: Question) {
   if (question.type !== "scenario") {
-    return null;
+    return undefined;
   }
-  const conceptNames = await drillConceptNames(getSyllabusRepository(), [question]);
-  return (
-    <p
-      style={{
-        display: "inline-block",
-        margin: 0,
-        padding: "0.25rem 0.5rem",
-        border: "1px solid #7a5cc2",
-        borderRadius: 4,
-        color: "#7a5cc2",
-      }}
-    >
-      Scenario · combines {question.conceptIds.length} Concepts:{" "}
-      {conceptList(question, conceptNames, ", ")}
-    </p>
-  );
+  return conceptList(question, await drillConceptNames(getSyllabusRepository(), [question]));
 }
 
 export default async function DrillPage({
@@ -59,100 +41,43 @@ export default async function DrillPage({
   const justAnswered = attemptId
     ? progress.steps.find((step) => step.attempt?.id === attemptId)
     : undefined;
-
-  const heading = (
-    <>
-      <p>
-        <Link href="/study/due">&larr; Due for review</Link>
-      </p>
-      <h1>Drill</h1>
-      <p style={{ color: "#666" }}>
-        {progress.answeredCount} of {progress.summary.total} answered
-      </p>
-    </>
-  );
+  const outcomes = progress.steps.map((step) => step.attempt?.correctness ?? null);
+  const numberOf = (question: Question) => progress.steps.findIndex((step) => step.question.id === question.id) + 1;
 
   if (justAnswered?.attempt) {
-    const { attempt } = justAnswered;
+    const { question, attempt } = justAnswered;
     return (
-      <main style={{ maxWidth: 560, margin: "4rem auto", padding: "0 1rem" }}>
-        {heading}
-        <ScenarioLabel question={justAnswered.question} />
-        <h2>{justAnswered.question.prompt}</h2>
-        <p>
-          <strong>Your answer:</strong> {attempt.submittedAnswer}
-        </p>
-        <p>
-          <strong>Confidence:</strong> {attempt.confidence}
-        </p>
-        <p>
-          <strong>Result:</strong> {attempt.correctness}
-        </p>
-        <p>{attempt.gradedExplanation}</p>
-        <p>
-          <Link href={`/study/drills/${drill.id}`}>
-            {progress.completed ? "See your summary" : "Next question"} &rarr;
-          </Link>
-        </p>
-      </main>
+      <DrillFrame drill={drill} outcomes={outcomes} currentIndex={null}>
+        <QuestionPrompt
+          question={question}
+          number={numberOf(question)}
+          scenarioConcepts={await scenarioConcepts(question)}
+          muted
+        />
+        <AttemptFeedback
+          question={question}
+          attempt={attempt}
+          next={
+            <Link
+              href={`/study/drills/${drill.id}`}
+              className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}
+            >
+              {progress.completed ? "See your results" : "Next question"}
+              <ArrowRight aria-hidden />
+            </Link>
+          }
+        />
+      </DrillFrame>
     );
   }
 
   if (progress.currentQuestion) {
     const question = progress.currentQuestion;
     return (
-      <main style={{ maxWidth: 560, margin: "4rem auto", padding: "0 1rem" }}>
-        {heading}
-        <ScenarioLabel question={question} />
-        <h2>{question.prompt}</h2>
-
-        <form
-          method="post"
-          action={`/api/questions/${question.id}/attempts`}
-          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-        >
-          <input type="hidden" name="drillId" value={drill.id} />
-
-          {question.type === "flashcard" && question.options ? (
-            <fieldset>
-              <legend>Choose an answer</legend>
-              {question.options.map((option, index) => (
-                <label key={index} style={{ display: "block" }}>
-                  <input type="radio" name="optionIndex" value={index} required />
-                  {option}
-                </label>
-              ))}
-            </fieldset>
-          ) : (
-            <label>
-              Your answer
-              <textarea name="submittedAnswer" rows={4} required />
-            </label>
-          )}
-
-          <fieldset>
-            <legend>Confidence</legend>
-            <label>
-              <input type="radio" name="confidence" value="guessed" required />
-              Guessed
-            </label>
-            <label>
-              <input type="radio" name="confidence" value="partial" required />
-              Partial
-            </label>
-            <label>
-              <input type="radio" name="confidence" value="confident" required />
-              Confident
-            </label>
-          </fieldset>
-
-          <button type="submit">Submit</button>
-
-          {error === "grading-failed" ? (
-            <p role="alert">Couldn&apos;t grade your answer right now. Please try again.</p>
-          ) : null}
-        </form>
-      </main>
+      <DrillFrame drill={drill} outcomes={outcomes} currentIndex={numberOf(question) - 1}>
+        <QuestionPrompt question={question} number={numberOf(question)} scenarioConcepts={await scenarioConcepts(question)} />
+        <AnswerForm question={question} drillId={drill.id} error={error} />
+      </DrillFrame>
     );
   }
 
@@ -162,27 +87,8 @@ export default async function DrillPage({
   );
 
   return (
-    <main style={{ maxWidth: 560, margin: "4rem auto", padding: "0 1rem" }}>
-      {heading}
-      <h2>Drill complete</h2>
-      <p>
-        {progress.summary.correct} correct, {progress.summary.partial} partial,{" "}
-        {progress.summary.incorrect} incorrect, out of {progress.summary.total}.
-      </p>
-
-      <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {progress.steps.map((step) => (
-          <li key={step.question.id} style={{ border: "1px solid #ccc", padding: "0.5rem" }}>
-            <strong>{conceptList(step.question, conceptNames, " + ")}</strong>{" "}
-            <span style={{ color: "#666" }}>({step.question.type})</span>
-            <p style={{ margin: "0.25rem 0" }}>{step.attempt?.correctness ?? "unanswered"}</p>
-          </li>
-        ))}
-      </ul>
-
-      <p>
-        <Link href="/study/due">Back to what&apos;s due</Link>
-      </p>
-    </main>
+    <DrillFrame drill={drill} outcomes={outcomes} currentIndex={null}>
+      <DrillResults drill={drill} progress={progress} conceptNames={conceptNames} />
+    </DrillFrame>
   );
 }

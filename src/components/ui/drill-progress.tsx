@@ -26,7 +26,7 @@ export function DrillProgressBar({
   const answered = outcomes.filter((outcome) => outcome !== null).length;
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <div aria-hidden className="flex w-24 gap-1 sm:w-36">
+      <div aria-hidden className="flex w-20 gap-1 sm:w-36">
         {outcomes.map((outcome, index) => (
           <span
             key={index}
@@ -37,7 +37,7 @@ export function DrillProgressBar({
           />
         ))}
       </div>
-      <span className="text-xs tabular-nums text-muted">
+      <span className="text-xs whitespace-nowrap tabular-nums text-muted">
         {answered} of {outcomes.length} answered
       </span>
     </div>

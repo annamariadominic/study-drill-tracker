@@ -1,4 +1,8 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { AnswerForm, AttemptFeedback, QuestionPrompt } from "@/components/study/question";
+import { Breadcrumbs } from "@/components/ui/page-header";
+import { buttonVariants } from "@/components/ui/button";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 
 export default async function QuestionPage({
@@ -21,68 +25,27 @@ export default async function QuestionPage({
   const result = attempt && attempt.questionId === question.id ? attempt : null;
 
   return (
-    <main style={{ maxWidth: 560, margin: "4rem auto", padding: "0 1rem" }}>
-      <h1>{question.prompt}</h1>
-
+    <div className="flex max-w-2xl flex-col gap-10">
+      <Breadcrumbs crumbs={[{ label: "Study", href: "/study" }]} />
+      <QuestionPrompt question={question} muted={Boolean(result)} />
       {result ? (
-        <section>
-          <p>
-            <strong>Your answer:</strong> {result.submittedAnswer}
-          </p>
-          <p>
-            <strong>Confidence:</strong> {result.confidence}
-          </p>
-          <p>
-            <strong>Result:</strong> {result.correctness}
-          </p>
-          <p>{result.gradedExplanation}</p>
-        </section>
+        <AttemptFeedback
+          question={question}
+          attempt={result}
+          next={
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link href="/study" className={buttonVariants({ size: "lg" })}>
+                Ask another question
+              </Link>
+              <Link href="/study/random" className={buttonVariants({ size: "lg", variant: "secondary" })}>
+                Start a random Drill
+              </Link>
+            </div>
+          }
+        />
       ) : (
-        <form
-          method="post"
-          action={`/api/questions/${question.id}/attempts`}
-          style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-        >
-          {question.type === "flashcard" && question.options ? (
-            <fieldset>
-              <legend>Choose an answer</legend>
-              {question.options.map((option, index) => (
-                <label key={index} style={{ display: "block" }}>
-                  <input type="radio" name="optionIndex" value={index} required />
-                  {option}
-                </label>
-              ))}
-            </fieldset>
-          ) : (
-            <label>
-              Your answer
-              <textarea name="submittedAnswer" rows={4} required />
-            </label>
-          )}
-
-          <fieldset>
-            <legend>Confidence</legend>
-            <label>
-              <input type="radio" name="confidence" value="guessed" required />
-              Guessed
-            </label>
-            <label>
-              <input type="radio" name="confidence" value="partial" required />
-              Partial
-            </label>
-            <label>
-              <input type="radio" name="confidence" value="confident" required />
-              Confident
-            </label>
-          </fieldset>
-
-          <button type="submit">Submit</button>
-
-          {error === "grading-failed" ? (
-            <p role="alert">Couldn&apos;t grade your answer right now. Please try again.</p>
-          ) : null}
-        </form>
+        <AnswerForm question={question} error={error} />
       )}
-    </main>
+    </div>
   );
 }
