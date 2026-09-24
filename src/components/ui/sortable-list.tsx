@@ -48,6 +48,7 @@ export function SortableList({
   idsKey,
   className,
   itemClassName,
+  handleClassName,
 }: {
   items: SortableItem[];
   saveUrl: string;
@@ -55,6 +56,8 @@ export function SortableList({
   idsKey: string;
   className?: string;
   itemClassName?: string;
+  /** E.g. to line the handle up with the first line of a taller row. */
+  handleClassName?: string;
 }) {
   const router = useRouter();
   const contextId = useId();
@@ -139,7 +142,13 @@ export function SortableList({
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <RowList className={className}>
             {shown.map((item) => (
-              <SortableRow key={item.id} item={item} disabled={saving || refreshing} className={itemClassName} />
+              <SortableRow
+                key={item.id}
+                item={item}
+                disabled={saving || refreshing}
+                className={itemClassName}
+                handleClassName={handleClassName}
+              />
             ))}
           </RowList>
         </SortableContext>
@@ -148,7 +157,17 @@ export function SortableList({
   );
 }
 
-function SortableRow({ item, disabled, className }: { item: SortableItem; disabled: boolean; className?: string }) {
+function SortableRow({
+  item,
+  disabled,
+  className,
+  handleClassName,
+}: {
+  item: SortableItem;
+  disabled: boolean;
+  className?: string;
+  handleClassName?: string;
+}) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     disabled,
@@ -168,7 +187,10 @@ function SortableRow({ item, disabled, className }: { item: SortableItem; disabl
         ref={setActivatorNodeRef}
         type="button"
         aria-label={`Reorder ${item.label}`}
-        className="-ml-2 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-control text-faint transition-colors duration-150 hover:bg-surface hover:text-muted active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-50"
+        className={cn(
+          "-ml-2 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-control text-faint transition-colors duration-150 hover:bg-surface hover:text-muted active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-50",
+          handleClassName,
+        )}
         {...attributes}
         {...listeners}
       >
