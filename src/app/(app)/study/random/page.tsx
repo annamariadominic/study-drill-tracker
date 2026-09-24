@@ -1,14 +1,33 @@
 import Link from "next/link";
+import { Choice } from "@/components/ui/choice";
+import { EmptyState, InlineAlert } from "@/components/ui/feedback";
+import { Field } from "@/components/ui/field";
+import { NativeSelect } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
+import { PendingSubmit } from "@/components/ui/pending-submit";
+import { buttonVariants } from "@/components/ui/button";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
+import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
-  "drill-generation-failed": "Couldn't generate a Drill right now. Please try again.",
+  "drill-generation-failed": "Couldn't generate a Drill right now. Try again.",
   "nothing-studied": "There's nothing studied to drill there yet.",
   "no-concepts-picked": "Pick at least one Concept to drill.",
-  "scope-changed": "Something you picked has changed since this page loaded. Please pick again.",
+  "scope-changed": "Something you picked has changed since this page loaded. Pick again.",
   "mixed-domains": "A Drill stays within one Domain, so pick Concepts from a single Domain.",
 };
+
+type Scope = "library" | "subject" | "concepts";
+
+const SCOPES: { value: Scope; label: string; description: string }[] = [
+  { value: "library", label: "Whole library", description: "Any studied Concepts, from one Domain picked at random." },
+  { value: "subject", label: "One Subject", description: "Studied Concepts from a Subject you choose." },
+  { value: "concepts", label: "Hand-picked", description: "Exactly the Concepts you tick, all from one Domain." },
+];
+
+/** Errors about picking Concepts send you back to that tab rather than the default one. */
+const CONCEPT_ERRORS = new Set(["no-concepts-picked", "mixed-domains", "scope-changed"]);
 
 type SubjectGroup = { id: string; name: string; studied: StudiedConcept[] };
 type DomainGroup = { id: string; name: string; subjects: SubjectGroup[] };
@@ -33,79 +52,130 @@ function groupLibrary(studiedConcepts: StudiedConcept[]): DomainGroup[] {
   return [...domains.values()];
 }
 
-const sectionStyle = { display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "2rem" } as const;
-
 export default async function RandomDrillPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; scope?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, scope: scopeParam } = await searchParams;
+  const scope: Scope = SCOPES.some(({ value }) => value === scopeParam)
+    ? (scopeParam as Scope)
+    : error && CONCEPT_ERRORS.has(error)
+      ? "concepts"
+      : "library";
   const library = groupLibrary(await listStudiedConcepts(getSyllabusRepository()));
 
   return (
-    <main style={{ maxWidth: 480, margin: "4rem auto", padding: "0 1rem" }}>
-      <p>
-        <Link href="/study">&larr; Study</Link>
-      </p>
+    <>
+      <PageHeader
+        crumbs={[{ label: "Study", href: "/study" }]}
+        title="Random Drill"
+        description="Drill any time, whether or not anything is due. A Drill stays within one Domain."
+      />
 
-      <h1>Random Drill</h1>
-      <p>Drill any time, whether or not anything is due. A Drill stays within one Domain.</p>
-
-      {error && ERRORS[error] ? <p role="alert">{ERRORS[error]}</p> : null}
+      {error && ERRORS[error] ? <InlineAlert className="mb-8">{ERRORS[error]}</InlineAlert> : null}
 
       {library.length === 0 ? (
-        <p>No studied Concepts yet. Mark a Concept as studied on its Subject page first.</p>
+        <EmptyState
+          title="Nothing studied yet"
+          action={
+            <Link href="/domains" className={buttonVariants({ variant: "secondary" })}>
+              Open your syllabus
+            </Link>
+          }
+        >
+          Mark a Concept as studied on its Subject page first, then come back to drill it.
+        </EmptyState>
       ) : (
         <>
-          <form method="post" action="/api/drills/random" style={sectionStyle}>
-            <h2 style={{ margin: 0 }}>Whole library</h2>
-            <input type="hidden" name="kind" value="library" />
-            <button type="submit">Start a random Drill</button>
-          </form>
+          <nav aria-label="What to drill" className="mb-8 grid gap-2 sm:grid-cols-3">
+            {SCOPES.map(({ value, label, description }) => {
+              const current = value === scope;
+              return (
+                <Link
+                  key={value}
+                  href={`/study/random?scope=${value}`}
+                  aria-current={current ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col gap-0.5 rounded-control border px-4 py-3 transition-colors duration-150",
+                    current
+                      ? "border-accent bg-accent-wash"
+                      : "border-line hover:border-line-strong hover:bg-surface",
+                  )}
+                >
+                  <span className={cn("text-sm font-medium", current ? "text-accent-strong" : "text-text")}>
+                    {label}
+                  </span>
+                  <span className="text-xs text-muted">{description}</span>
+                </Link>
+              );
+            })}
+          </nav>
 
-          <form method="post" action="/api/drills/random" style={sectionStyle}>
-            <h2 style={{ margin: 0 }}>One Subject</h2>
-            <input type="hidden" name="kind" value="subject" />
-            <label>
-              Subject{" "}
-              <select name="subjectId" required>
-                {library.map((domain) => (
-                  <optgroup key={domain.id} label={domain.name}>
+          {scope === "library" ? (
+            <form method="post" action="/api/drills/random" className="flex flex-col items-start gap-4">
+              <input type="hidden" name="kind" value="library" />
+              <p className="max-w-prose text-sm text-muted">
+                One of your Domains is picked at random, then the Drill draws from everything you&apos;ve studied in
+                it.
+              </p>
+              <PendingSubmit pendingLabel="Generating Drill…">Start a random Drill</PendingSubmit>
+            </form>
+          ) : null}
+
+          {scope === "subject" ? (
+            <form method="post" action="/api/drills/random" className="flex max-w-xl flex-col gap-4">
+              <input type="hidden" name="kind" value="subject" />
+              <Field label="Subject" htmlFor="subject">
+                <NativeSelect id="subject" name="subjectId" required>
+                  {library.map((domain) => (
+                    <optgroup key={domain.id} label={domain.name}>
+                      {domain.subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name} ({subject.studied.length} studied)
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <div>
+                <PendingSubmit pendingLabel="Generating Drill…">Drill this Subject</PendingSubmit>
+              </div>
+            </form>
+          ) : null}
+
+          {scope === "concepts" ? (
+            <form method="post" action="/api/drills/random" className="flex flex-col gap-10">
+              <input type="hidden" name="kind" value="concepts" />
+              {library.map((domain) => (
+                <fieldset key={domain.id} className="min-w-0">
+                  <legend className="mb-4 w-full border-b border-line pb-2 font-serif text-xl text-text">
+                    {domain.name}
+                  </legend>
+                  <div className="flex flex-col gap-6">
                     {domain.subjects.map((subject) => (
-                      <option key={subject.id} value={subject.id}>
-                        {subject.name} ({subject.studied.length} studied)
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            <button type="submit">Drill this Subject</button>
-          </form>
-
-          <form method="post" action="/api/drills/random" style={sectionStyle}>
-            <h2 style={{ margin: 0 }}>Hand-picked Concepts</h2>
-            <input type="hidden" name="kind" value="concepts" />
-            {library.map((domain) => (
-              <fieldset key={domain.id}>
-                <legend>{domain.name}</legend>
-                {domain.subjects.map((subject) => (
-                  <div key={subject.id} style={{ marginBottom: "0.5rem" }}>
-                    <p style={{ margin: "0.25rem 0", color: "#666" }}>{subject.name}</p>
-                    {subject.studied.map(({ concept }) => (
-                      <label key={concept.id} style={{ display: "block" }}>
-                        <input type="checkbox" name="conceptId" value={concept.id} /> {concept.name}
-                      </label>
+                      <div key={subject.id}>
+                        <p className="mb-1 text-xs font-medium text-muted">{subject.name}</p>
+                        <div className="-mx-3 grid gap-x-4 sm:grid-cols-2">
+                          {subject.studied.map(({ concept }) => (
+                            <Choice key={concept.id} type="checkbox" name="conceptId" value={concept.id} plain>
+                              {concept.name}
+                            </Choice>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                ))}
-              </fieldset>
-            ))}
-            <button type="submit">Drill these Concepts</button>
-          </form>
+                </fieldset>
+              ))}
+              <div className="sticky bottom-0 -mx-4 border-t border-line bg-bg/95 px-4 py-4 backdrop-blur-sm sm:mx-0 sm:px-0">
+                <PendingSubmit pendingLabel="Generating Drill…">Drill these Concepts</PendingSubmit>
+              </div>
+            </form>
+          ) : null}
         </>
       )}
-    </main>
+    </>
   );
 }

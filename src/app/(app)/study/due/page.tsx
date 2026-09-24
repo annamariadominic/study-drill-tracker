@@ -1,4 +1,9 @@
+import { Shuffle } from "lucide-react";
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { EmptyState, InlineAlert } from "@/components/ui/feedback";
+import { PageHeader } from "@/components/ui/page-header";
+import { PendingSubmit } from "@/components/ui/pending-submit";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listDueConcepts, type DueConcept } from "@/lib/syllabus/list-due-concepts";
 
@@ -19,6 +24,10 @@ function groupByDomain(dueConcepts: DueConcept[]) {
   return [...groups.entries()];
 }
 
+function plural(count: number, noun: string) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 export default async function DueConceptsPage({
   searchParams,
 }: {
@@ -29,55 +38,68 @@ export default async function DueConceptsPage({
   const domains = groupByDomain(dueConcepts);
 
   return (
-    <main style={{ maxWidth: 480, margin: "4rem auto", padding: "0 1rem" }}>
-      <p>
-        <Link href="/study">&larr; Study</Link>
-      </p>
-
-      <h1>Due for review</h1>
+    <>
+      <PageHeader
+        crumbs={[{ label: "Study", href: "/study" }]}
+        title="Due for review"
+        description={
+          domains.length > 0
+            ? `${plural(dueConcepts.length, "Concept")} due across ${plural(domains.length, "Domain")}. A Drill stays within one Domain, so each starts its own.`
+            : undefined
+        }
+      />
 
       {error === "drill-generation-failed" ? (
-        <p role="alert">Couldn&apos;t generate a Drill right now. Please try again.</p>
+        <InlineAlert className="mb-8">Couldn&apos;t generate a Drill right now. Try again.</InlineAlert>
       ) : null}
       {error === "nothing-due" ? (
-        <p role="alert">Nothing is due in that Domain any more.</p>
+        <InlineAlert className="mb-8">Nothing is due in that Domain any more.</InlineAlert>
       ) : null}
 
       {domains.length === 0 ? (
-        <p>
-          Nothing is due right now. Check back later, or{" "}
-          <Link href="/study/random">start a random Drill</Link>.
-        </p>
+        <EmptyState
+          title="Nothing is due right now"
+          action={
+            <Link href="/study/random" className={buttonVariants({ variant: "secondary" })}>
+              <Shuffle aria-hidden />
+              Start a random Drill
+            </Link>
+          }
+        >
+          Your review schedule will bring Concepts back when it&apos;s time. You can still drill in the meantime.
+        </EmptyState>
       ) : (
-        domains.map(([domainId, group]) => (
-          <section key={domainId} style={{ marginBottom: "2rem" }}>
-            <h2>{group.name}</h2>
+        <div className="flex flex-col gap-12">
+          {domains.map(([domainId, group]) => (
+            <section key={domainId} aria-labelledby={`due-${domainId}`}>
+              <div className="flex flex-col gap-4 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 id={`due-${domainId}`} className="font-serif text-xl text-text">
+                    {group.name}
+                  </h2>
+                  <p className="text-sm text-muted">{plural(group.dueConcepts.length, "Concept")} due</p>
+                </div>
+                <form method="post" action="/api/drills">
+                  <input type="hidden" name="domainId" value={domainId} />
+                  <PendingSubmit pendingLabel="Generating Drill…">Start Drill</PendingSubmit>
+                </form>
+              </div>
 
-            <form method="post" action="/api/drills">
-              <input type="hidden" name="domainId" value={domainId} />
-              <button type="submit">Start a Drill ({group.dueConcepts.length} due)</button>
-            </form>
-
-            <ul
-              style={{
-                listStyle: "none",
-                padding: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
-                marginTop: "1rem",
-              }}
-            >
-              {group.dueConcepts.map(({ concept, subject }) => (
-                <li key={concept.id} style={{ border: "1px solid #ccc", padding: "0.75rem" }}>
-                  <strong>{concept.name}</strong>
-                  <p style={{ margin: "0.25rem 0", color: "#666" }}>{subject.name}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
+              <ul className="divide-y divide-line">
+                {group.dueConcepts.map(({ concept, subject }) => (
+                  <li
+                    key={concept.id}
+                    className="flex flex-col gap-0.5 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
+                  >
+                    <span className="text-text">{concept.name}</span>
+                    <span className="shrink-0 text-xs text-muted">{subject.name}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
       )}
-    </main>
+    </>
   );
 }

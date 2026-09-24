@@ -48,9 +48,12 @@ export function Choice({
   defaultChecked,
   marker,
   description,
+  plain = false,
   className,
   children,
 }: ChoiceInputProps & {
+  /** Drops the border so long lists (e.g. picking Concepts) stay light. */
+  plain?: boolean;
   /** Replaces the default radio/checkbox indicator, e.g. an answer letter. */
   marker?: ReactNode;
   description?: ReactNode;
@@ -58,7 +61,14 @@ export function Choice({
   children: ReactNode;
 }) {
   return (
-    <label className={cn(choiceFrame, "items-start gap-3 px-4 py-3", className)}>
+    <label
+      className={cn(
+        choiceFrame,
+        "items-start gap-3 px-4 py-3",
+        plain && "border-transparent bg-transparent px-3 py-2 has-checked:border-transparent",
+        className,
+      )}
+    >
       <input
         className="peer sr-only"
         type={type}
