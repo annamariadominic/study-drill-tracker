@@ -10,22 +10,34 @@ export function RowList({ className, ...props }: ComponentProps<"ul">) {
   return <ul className={cn("divide-y divide-line border-b border-line", className)} {...props} />;
 }
 
+type RowLinkProps = { href: string; children: ReactNode; meta?: ReactNode; className?: string };
+
 /** A whole-row link to the next level down, e.g. a Domain to its Subjects. */
-export function RowLink({ href, children, meta }: { href: string; children: ReactNode; meta?: ReactNode }) {
+export function RowLink(props: RowLinkProps) {
   return (
     <li>
-      <Link
-        href={href}
-        className="group -mx-3 flex min-h-14 items-center gap-4 rounded-control px-3 py-3 transition-colors duration-150 hover:bg-surface"
-      >
-        <span className="min-w-0 flex-1 font-serif text-lg text-text">{children}</span>
-        {meta ? <span className="shrink-0 text-xs text-muted">{meta}</span> : null}
-        <ChevronRight
-          aria-hidden
-          className="size-4 shrink-0 text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted"
-        />
-      </Link>
+      <RowLinkAnchor {...props} />
     </li>
+  );
+}
+
+/** The link inside a `RowLink`, for rows that wrap it in their own `<li>`, e.g. a sortable row. */
+export function RowLinkAnchor({ href, children, meta, className }: RowLinkProps) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group -mx-3 flex min-h-14 items-center gap-4 rounded-control px-3 py-3 transition-colors duration-150 hover:bg-surface",
+        className,
+      )}
+    >
+      <span className="min-w-0 flex-1 font-serif text-lg text-text">{children}</span>
+      {meta ? <span className="shrink-0 text-xs text-muted">{meta}</span> : null}
+      <ChevronRight
+        aria-hidden
+        className="size-4 shrink-0 text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-muted"
+      />
+    </Link>
   );
 }
 

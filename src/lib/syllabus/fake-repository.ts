@@ -1,8 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { initialReviewSchedule, pullReviewCloser, scheduleFromFields } from "@/lib/study/scheduling";
-import { NotFoundError } from "./errors";
+import { InvalidOrderError, NotFoundError } from "./errors";
 import type { SyllabusRepository } from "./repository";
 import type { Concept, ConceptStatus, Domain, Subject } from "./types";
+
+/** Mirrors the exact-sibling check the database's reorder functions make. */
+function assertSameSiblings(label: string, siblings: { id: string }[], requestedIds: string[]) {
+  const siblingIds = new Set(siblings.map((sibling) => sibling.id));
+  const exact =
+    requestedIds.length === siblingIds.size &&
+    new Set(requestedIds).size === requestedIds.length &&
+    requestedIds.every((id) => siblingIds.has(id));
+  if (!exact) {
+    throw new InvalidOrderError(`The new order must list each of the ${label} exactly once`);
+  }
+}
 
 export class FakeSyllabusRepository implements SyllabusRepository {
   private domains = new Map<string, Domain>();
@@ -38,7 +50,9 @@ export class FakeSyllabusRepository implements SyllabusRepository {
   }
 
   async listSubjects(domainId: string): Promise<Subject[]> {
-    return [...this.subjects.values()].filter((subject) => subject.domainId === domainId);
+    return [...this.subjects.values()]
+      .filter((subject) => subject.domainId === domainId)
+      .sort((a, b) => a.position - b.position);
   }
 
   async getSubject(id: string): Promise<Subject | null> {
@@ -46,10 +60,12 @@ export class FakeSyllabusRepository implements SyllabusRepository {
   }
 
   async createSubject(domainId: string, input: { name: string }): Promise<Subject> {
+    const siblings = await this.listSubjects(domainId);
     const subject: Subject = {
       id: randomUUID(),
       domainId,
       name: input.name,
+      position: siblings.length === 0 ? 0 : siblings[siblings.length - 1].position + 1,
       createdAt: new Date().toISOString(),
     };
     this.subjects.set(subject.id, subject);
@@ -64,6 +80,17 @@ export class FakeSyllabusRepository implements SyllabusRepository {
     const updated: Subject = { ...subject, name: input.name };
     this.subjects.set(id, updated);
     return updated;
+  }
+
+  async reorderSubjects(domainId: string, subjectIds: string[]): Promise<void> {
+    if (!this.domains.has(domainId)) {
+      throw new NotFoundError("Domain", domainId);
+    }
+    const siblings = await this.listSubjects(domainId);
+    assertSameSiblings("Subjects", siblings, subjectIds);
+    subjectIds.forEach((id, position) => {
+      this.subjects.set(id, { ...this.subjects.get(id)!, position });
+    });
   }
 
   async listConcepts(subjectId: string): Promise<Concept[]> {

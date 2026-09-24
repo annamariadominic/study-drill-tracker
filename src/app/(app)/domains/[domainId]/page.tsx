@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { EditDisclosure } from "@/components/ui/disclosure";
 import { EmptyState, InlineAlert } from "@/components/ui/feedback";
 import { Input } from "@/components/ui/input";
-import { AddRow, RowLink, RowList } from "@/components/ui/list";
+import { AddRow, RowLinkAnchor } from "@/components/ui/list";
 import { PageHeader, SectionHeading } from "@/components/ui/page-header";
+import { SortableList } from "@/components/ui/sortable-list";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
 export default async function DomainPage({
@@ -52,13 +53,19 @@ export default async function DomainPage({
             A Subject is an area of study within {domain.name}, like System Design. Add one below.
           </EmptyState>
         ) : (
-          <RowList>
-            {subjects.map((subject) => (
-              <RowLink key={subject.id} href={`/domains/${domain.id}/subjects/${subject.id}`}>
-                {subject.name}
-              </RowLink>
-            ))}
-          </RowList>
+          <SortableList
+            saveUrl={`/api/domains/${domain.id}/subjects/order`}
+            idsKey="subjectIds"
+            items={subjects.map((subject) => ({
+              id: subject.id,
+              label: subject.name,
+              content: (
+                <RowLinkAnchor href={`/domains/${domain.id}/subjects/${subject.id}`} className="ml-0">
+                  {subject.name}
+                </RowLinkAnchor>
+              ),
+            }))}
+          />
         )}
 
         <AddRow
