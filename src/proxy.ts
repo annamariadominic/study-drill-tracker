@@ -17,8 +17,10 @@ export async function proxy(request: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
+// Only the cron route itself is excluded: it authenticates with CRON_SECRET, not the
+// session cookie (ADR 0005).
 export const config = {
   matcher: [
-    "/((?!login(?:/|$)|api/login(?:/|$)|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login(?:/|$)|api/login(?:/|$)|api/cron/due-reminder(?:/|$)|_next/static|_next/image|favicon.ico).*)",
   ],
 };
