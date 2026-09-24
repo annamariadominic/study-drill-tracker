@@ -26,6 +26,12 @@ export interface SyllabusRepository {
     id: string,
     input: { name?: string; notes?: string | null },
   ): Promise<Concept>;
+  /**
+   * Puts a Subject's Concepts in the given order. `conceptIds` must be exactly
+   * that Subject's Concepts, each once; otherwise nothing changes. Changes only
+   * the order, never a Concept's status or review schedule.
+   */
+  reorderConcepts(subjectId: string, conceptIds: string[]): Promise<void>;
   setConceptStatus(id: string, status: ConceptStatus): Promise<Concept>;
   updateConceptReviewSchedule(
     id: string,

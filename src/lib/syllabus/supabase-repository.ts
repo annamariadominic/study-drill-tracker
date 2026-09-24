@@ -11,6 +11,7 @@ type ConceptRow = {
   subject_id: string;
   name: string;
   notes: string | null;
+  position: number;
   status: ConceptStatus;
   studied_at: string | null;
   created_at: string;
@@ -41,6 +42,7 @@ function toConcept(row: ConceptRow): Concept {
     subjectId: row.subject_id,
     name: row.name,
     notes: row.notes,
+    position: row.position,
     status: row.status,
     studiedAt: row.studied_at,
     createdAt: row.created_at,
@@ -149,17 +151,28 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async reorderSubjects(domainId: string, subjectIds: string[]): Promise<void> {
-    // Checked here so a malformed Domain id reads as not found, rather than as
-    // the invalid-uuid error (22P02) a malformed Subject id gets below.
-    if (!UUID.test(domainId)) throw new NotFoundError("Domain", domainId);
-    // The reorder_subjects function validates and rewrites in one transaction.
-    const { error } = await this.client.rpc("reorder_subjects", {
+    await this.reorder("reorder_subjects", { entity: "Domain", id: domainId }, {
       target_domain_id: domainId,
       subject_ids: subjectIds,
     });
+  }
+
+  /**
+   * Calls one of the reorder_* functions, which validate the sibling list and
+   * rewrite positions in one transaction, and maps their errors.
+   */
+  private async reorder(
+    fn: "reorder_subjects" | "reorder_concepts",
+    parent: { entity: "Domain" | "Subject"; id: string },
+    args: Record<string, unknown>,
+  ): Promise<void> {
+    // Checked here so a malformed parent id reads as not found, rather than as
+    // the invalid-uuid error (22P02) a malformed child id gets below.
+    if (!UUID.test(parent.id)) throw new NotFoundError(parent.entity, parent.id);
+    const { error } = await this.client.rpc(fn, args);
     if (!error) return;
-    if (error.code === "P0002") throw new NotFoundError("Domain", domainId);
-    // 22023: not exactly the Domain's Subjects; 22P02: an id that isn't a uuid.
+    if (error.code === "P0002") throw new NotFoundError(parent.entity, parent.id);
+    // 22023: not exactly the parent's children; 22P02: an id that isn't a uuid.
     if (error.code === "22023" || error.code === "22P02") throw new InvalidOrderError(error.message);
     throw error;
   }
@@ -169,7 +182,7 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
       .from("concepts")
       .select("*")
       .eq("subject_id", subjectId)
-      .order("created_at", { ascending: true });
+      .order("position", { ascending: true });
     if (error) throw error;
     return (data as ConceptRow[]).map(toConcept);
   }
@@ -188,9 +201,26 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
     subjectId: string,
     input: { name: string; notes?: string | null },
   ): Promise<Concept> {
+    // A new Concept goes to the bottom of its Subject's list. Two creates racing
+    // on one Subject would collide on the (subject_id, position) constraint and
+    // one would fail, rather than store a duplicate position.
+    const { data: last, error: lastError } = await this.client
+      .from("concepts")
+      .select("position")
+      .eq("subject_id", subjectId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastError) throw lastError;
+
     const { data, error } = await this.client
       .from("concepts")
-      .insert({ subject_id: subjectId, name: input.name, notes: input.notes ?? null })
+      .insert({
+        subject_id: subjectId,
+        name: input.name,
+        notes: input.notes ?? null,
+        position: last ? last.position + 1 : 0,
+      })
       .select()
       .single();
     if (error) throw error;
@@ -234,6 +264,13 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
     if (error) throw error;
     if (!data) throw new NotFoundError("Concept", id);
     return toConcept(data as ConceptRow);
+  }
+
+  async reorderConcepts(subjectId: string, conceptIds: string[]): Promise<void> {
+    await this.reorder("reorder_concepts", { entity: "Subject", id: subjectId }, {
+      target_subject_id: subjectId,
+      concept_ids: conceptIds,
+    });
   }
 
   async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {

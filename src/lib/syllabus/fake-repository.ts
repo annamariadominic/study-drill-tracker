@@ -94,7 +94,9 @@ export class FakeSyllabusRepository implements SyllabusRepository {
   }
 
   async listConcepts(subjectId: string): Promise<Concept[]> {
-    return [...this.concepts.values()].filter((concept) => concept.subjectId === subjectId);
+    return [...this.concepts.values()]
+      .filter((concept) => concept.subjectId === subjectId)
+      .sort((a, b) => a.position - b.position);
   }
 
   async getConcept(id: string): Promise<Concept | null> {
@@ -105,11 +107,13 @@ export class FakeSyllabusRepository implements SyllabusRepository {
     subjectId: string,
     input: { name: string; notes?: string | null },
   ): Promise<Concept> {
+    const siblings = await this.listConcepts(subjectId);
     const concept: Concept = {
       id: randomUUID(),
       subjectId,
       name: input.name,
       notes: input.notes ?? null,
+      position: siblings.length === 0 ? 0 : siblings[siblings.length - 1].position + 1,
       status: "planned",
       studiedAt: null,
       createdAt: new Date().toISOString(),
@@ -151,6 +155,17 @@ export class FakeSyllabusRepository implements SyllabusRepository {
     };
     this.concepts.set(id, updated);
     return updated;
+  }
+
+  async reorderConcepts(subjectId: string, conceptIds: string[]): Promise<void> {
+    if (!this.subjects.has(subjectId)) {
+      throw new NotFoundError("Subject", subjectId);
+    }
+    const siblings = await this.listConcepts(subjectId);
+    assertSameSiblings("Concepts", siblings, conceptIds);
+    conceptIds.forEach((id, position) => {
+      this.concepts.set(id, { ...this.concepts.get(id)!, position });
+    });
   }
 
   async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {

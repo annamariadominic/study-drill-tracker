@@ -20,6 +20,8 @@ export type Concept = {
   subjectId: string;
   name: string;
   notes: string | null;
+  /** 0-based place in its Subject's manually ordered Concept list. */
+  position: number;
   status: ConceptStatus;
   studiedAt: string | null;
   createdAt: string;
