@@ -10,8 +10,11 @@ import { ConceptNotStudiedError } from "@/lib/study/errors";
 import { NotFoundError } from "@/lib/syllabus/errors";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
-function redirectWithError(request: NextRequest, error: string) {
-  return NextResponse.redirect(new URL(`/study/random?error=${error}`, request.url), { status: 303 });
+/** Back to the random Drill page with a message, on the scope the form was submitted from. */
+function redirectWithError(request: NextRequest, error: string, scopeKind: RandomDrillScope["kind"]) {
+  return NextResponse.redirect(new URL(`/study/random?scope=${scopeKind}&error=${error}`, request.url), {
+    status: 303,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -35,7 +38,7 @@ export async function POST(request: NextRequest) {
       .getAll("conceptId")
       .filter((conceptId): conceptId is string => typeof conceptId === "string" && conceptId.length > 0);
     if (conceptIds.length === 0) {
-      return redirectWithError(request, "no-concepts-picked");
+      return redirectWithError(request, "no-concepts-picked", "concepts");
     }
     scope = { kind: "concepts", conceptIds };
   } else {
@@ -57,14 +60,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof NotFoundError || error instanceof ConceptNotStudiedError) {
-      return redirectWithError(request, "scope-changed");
+      return redirectWithError(request, "scope-changed", scope.kind);
     }
     if (error instanceof NoStudiedConceptsError) {
-      return redirectWithError(request, "nothing-studied");
+      return redirectWithError(request, "nothing-studied", scope.kind);
     }
     if (error instanceof MixedDomainsError) {
-      return redirectWithError(request, "mixed-domains");
+      return redirectWithError(request, "mixed-domains", scope.kind);
     }
-    return redirectWithError(request, "drill-generation-failed");
+    return redirectWithError(request, "drill-generation-failed", scope.kind);
   }
 }

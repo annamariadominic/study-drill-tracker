@@ -14,6 +14,8 @@ export async function POST(
   const status = formData.get("status");
   const domainId = formData.get("domainId");
   const subjectId = formData.get("subjectId");
+  // The Subject page's Concept filter, kept across the redirect when it's one we know.
+  const show = formData.get("show");
 
   if (typeof domainId !== "string" || typeof subjectId !== "string") {
     return NextResponse.json({ error: "domainId and subjectId are required" }, { status: 400 });
@@ -32,8 +34,9 @@ export async function POST(
     throw error;
   }
 
+  const filter = typeof show === "string" && VALID_STATUSES.includes(show as ConceptStatus) ? `?show=${show}` : "";
   return NextResponse.redirect(
-    new URL(`/domains/${domainId}/subjects/${subjectId}`, request.url),
+    new URL(`/domains/${domainId}/subjects/${subjectId}${filter}`, request.url),
     { status: 303 },
   );
 }

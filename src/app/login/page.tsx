@@ -1,3 +1,8 @@
+import { Field } from "@/components/ui/field";
+import { InlineAlert } from "@/components/ui/feedback";
+import { Input } from "@/components/ui/input";
+import { PendingSubmit } from "@/components/ui/pending-submit";
+
 export default async function LoginPage({
   searchParams,
 }: {
@@ -6,18 +11,29 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main style={{ maxWidth: 320, margin: "4rem auto", padding: "0 1rem" }}>
-      <h1>Study Drill Tracker</h1>
-      <form
-        method="post"
-        action="/api/login"
-        style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
-      >
-        <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" required autoFocus />
-        <button type="submit">Enter</button>
-        {error ? <p role="alert">Incorrect password.</p> : null}
-      </form>
+    <main className="flex min-h-dvh items-center justify-center px-4 py-16">
+      <div className="w-full max-w-xs">
+        <h1 className="font-serif text-2xl tracking-[-0.01em] text-text">Study Drill Tracker</h1>
+        <p className="mt-1 text-sm text-muted">Enter your password to continue.</p>
+
+        <form method="post" action="/api/login" className="mt-8 flex flex-col gap-4">
+          <Field label="Password" htmlFor="password">
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              autoFocus
+              aria-invalid={error ? true : undefined}
+            />
+          </Field>
+          {error ? <InlineAlert>Incorrect password. Try again.</InlineAlert> : null}
+          <PendingSubmit pendingLabel="Signing in…" className="w-full">
+            Sign in
+          </PendingSubmit>
+        </form>
+      </div>
     </main>
   );
 }
