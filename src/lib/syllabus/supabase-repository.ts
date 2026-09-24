@@ -1,11 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { initialReviewSchedule, pullReviewCloser, scheduleFromFields } from "@/lib/study/scheduling";
-import { NotFoundError } from "./errors";
+import { InvalidOrderError, NotFoundError } from "./errors";
 import type { SyllabusRepository } from "./repository";
 import type { Concept, ConceptStatus, Domain, Subject } from "./types";
 
 type DomainRow = { id: string; name: string; created_at: string };
-type SubjectRow = { id: string; domain_id: string; name: string; created_at: string };
+type SubjectRow = { id: string; domain_id: string; name: string; position: number; created_at: string };
 type ConceptRow = {
   id: string;
   subject_id: string;
@@ -24,7 +24,13 @@ function toDomain(row: DomainRow): Domain {
 }
 
 function toSubject(row: SubjectRow): Subject {
-  return { id: row.id, domainId: row.domain_id, name: row.name, createdAt: row.created_at };
+  return {
+    id: row.id,
+    domainId: row.domain_id,
+    name: row.name,
+    position: row.position,
+    createdAt: row.created_at,
+  };
 }
 
 function toConcept(row: ConceptRow): Concept {
@@ -91,7 +97,7 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
       .from("subjects")
       .select("*")
       .eq("domain_id", domainId)
-      .order("created_at", { ascending: true });
+      .order("position", { ascending: true });
     if (error) throw error;
     return (data as SubjectRow[]).map(toSubject);
   }
@@ -107,9 +113,21 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async createSubject(domainId: string, input: { name: string }): Promise<Subject> {
+    // A new Subject goes to the bottom of its Domain's list. Two creates racing
+    // on one Domain would collide on the (domain_id, position) constraint and
+    // one would fail, rather than store a duplicate position.
+    const { data: last, error: lastError } = await this.client
+      .from("subjects")
+      .select("position")
+      .eq("domain_id", domainId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastError) throw lastError;
+
     const { data, error } = await this.client
       .from("subjects")
-      .insert({ domain_id: domainId, name: input.name })
+      .insert({ domain_id: domainId, name: input.name, position: last ? last.position + 1 : 0 })
       .select()
       .single();
     if (error) throw error;
@@ -126,6 +144,19 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
     if (error) throw error;
     if (!data) throw new NotFoundError("Subject", id);
     return toSubject(data as SubjectRow);
+  }
+
+  async reorderSubjects(domainId: string, subjectIds: string[]): Promise<void> {
+    // The reorder_subjects function validates and rewrites in one transaction.
+    const { error } = await this.client.rpc("reorder_subjects", {
+      target_domain_id: domainId,
+      subject_ids: subjectIds,
+    });
+    if (!error) return;
+    if (error.code === "P0002") throw new NotFoundError("Domain", domainId);
+    // 22023: not exactly the Domain's Subjects; 22P02: an id that isn't a uuid.
+    if (error.code === "22023" || error.code === "22P02") throw new InvalidOrderError(error.message);
+    throw error;
   }
 
   async listConcepts(subjectId: string): Promise<Concept[]> {

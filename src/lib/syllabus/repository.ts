@@ -10,6 +10,11 @@ export interface SyllabusRepository {
   getSubject(id: string): Promise<Subject | null>;
   createSubject(domainId: string, input: { name: string }): Promise<Subject>;
   updateSubject(id: string, input: { name: string }): Promise<Subject>;
+  /**
+   * Puts a Domain's Subjects in the given order. `subjectIds` must be exactly
+   * that Domain's Subjects, each once; otherwise nothing changes.
+   */
+  reorderSubjects(domainId: string, subjectIds: string[]): Promise<void>;
 
   listConcepts(subjectId: string): Promise<Concept[]>;
   getConcept(id: string): Promise<Concept | null>;

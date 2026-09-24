@@ -10,6 +10,8 @@ export type Subject = {
   id: string;
   domainId: string;
   name: string;
+  /** 0-based place in its Domain's manually ordered Subject list. */
+  position: number;
   createdAt: string;
 };
 

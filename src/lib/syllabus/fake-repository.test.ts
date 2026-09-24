@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeSyllabusRepository } from "./fake-repository";
-import { NotFoundError } from "./errors";
+import { InvalidOrderError, NotFoundError } from "./errors";
 
 describe("FakeSyllabusRepository", () => {
   let repo: FakeSyllabusRepository;
@@ -66,6 +66,106 @@ describe("FakeSyllabusRepository", () => {
       await expect(repo.updateSubject("missing", { name: "x" })).rejects.toThrow(
         NotFoundError,
       );
+    });
+
+    describe("ordering", () => {
+      async function seed() {
+        const domain = await repo.createDomain({ name: "AI Engineering" });
+        const architecture = await repo.createSubject(domain.id, { name: "Choosing the right AI architecture" });
+        const workflows = await repo.createSubject(domain.id, { name: "LLM workflow patterns" });
+        const agents = await repo.createSubject(domain.id, { name: "Agent fundamentals" });
+        return { domain, architecture, workflows, agents };
+      }
+
+      async function names(domainId: string) {
+        return (await repo.listSubjects(domainId)).map((subject) => subject.name);
+      }
+
+      it("persists a reorder and lists Subjects in the new order", async () => {
+        const { domain, architecture, workflows, agents } = await seed();
+
+        await repo.reorderSubjects(domain.id, [agents.id, architecture.id, workflows.id]);
+
+        expect(await names(domain.id)).toEqual([
+          "Agent fundamentals",
+          "Choosing the right AI architecture",
+          "LLM workflow patterns",
+        ]);
+      });
+
+      it("adds a new Subject to the bottom, and it can then be moved to the top", async () => {
+        const { domain, architecture, workflows, agents } = await seed();
+
+        const fundamentals = await repo.createSubject(domain.id, { name: "AI system fundamentals" });
+        expect(await names(domain.id)).toEqual([
+          "Choosing the right AI architecture",
+          "LLM workflow patterns",
+          "Agent fundamentals",
+          "AI system fundamentals",
+        ]);
+
+        await repo.reorderSubjects(domain.id, [fundamentals.id, architecture.id, workflows.id, agents.id]);
+        expect(await names(domain.id)).toEqual([
+          "AI system fundamentals",
+          "Choosing the right AI architecture",
+          "LLM workflow patterns",
+          "Agent fundamentals",
+        ]);
+      });
+
+      it("adds a new Subject to the bottom of a reordered list", async () => {
+        const { domain, architecture, workflows, agents } = await seed();
+        await repo.reorderSubjects(domain.id, [agents.id, workflows.id, architecture.id]);
+
+        await repo.createSubject(domain.id, { name: "AI system fundamentals" });
+
+        expect(await names(domain.id)).toEqual([
+          "Agent fundamentals",
+          "LLM workflow patterns",
+          "Choosing the right AI architecture",
+          "AI system fundamentals",
+        ]);
+      });
+
+      it.each([
+        ["a Subject is missing", (ids: string[]) => ids.slice(1)],
+        ["a Subject is repeated", (ids: string[]) => [ids[0], ...ids]],
+        ["a Subject is repeated in place of another", (ids: string[]) => [ids[0], ids[0], ids[2]]],
+        ["an unknown id is included", (ids: string[]) => [...ids, "missing"]],
+      ])("rejects the order and changes nothing when %s", async (_case, mangle) => {
+        const { domain, architecture, workflows, agents } = await seed();
+        const before = await names(domain.id);
+
+        await expect(
+          repo.reorderSubjects(domain.id, mangle([agents.id, architecture.id, workflows.id])),
+        ).rejects.toThrow(InvalidOrderError);
+
+        expect(await names(domain.id)).toEqual(before);
+      });
+
+      it("rejects a Subject from another Domain and changes neither Domain", async () => {
+        const { domain, architecture, workflows, agents } = await seed();
+        const other = await repo.createDomain({ name: "Software Engineering" });
+        const systemDesign = await repo.createSubject(other.id, { name: "System Design" });
+
+        await expect(
+          repo.reorderSubjects(domain.id, [systemDesign.id, architecture.id, workflows.id]),
+        ).rejects.toThrow(InvalidOrderError);
+        await expect(
+          repo.reorderSubjects(domain.id, [agents.id, architecture.id, workflows.id, systemDesign.id]),
+        ).rejects.toThrow(InvalidOrderError);
+
+        expect(await names(domain.id)).toEqual([
+          "Choosing the right AI architecture",
+          "LLM workflow patterns",
+          "Agent fundamentals",
+        ]);
+        expect((await repo.listSubjects(other.id)).map((subject) => subject.position)).toEqual([0]);
+      });
+
+      it("throws NotFoundError when reordering a missing Domain", async () => {
+        await expect(repo.reorderSubjects("missing", [])).rejects.toThrow(NotFoundError);
+      });
     });
   });
 
