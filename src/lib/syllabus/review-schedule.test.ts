@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeSyllabusRepository } from "./fake-repository";
 import { listStudiedConcepts } from "./list-studied-concepts";
 import type { SyllabusRepository } from "./repository";
@@ -143,6 +143,34 @@ describe("groupReviewSchedule", () => {
 
     expect(second).toEqual(first);
     expect(first.upcoming.map((g) => g.reviews.map((r) => r.conceptName))).toEqual([["A"], ["B", "C"]]);
+  });
+
+  describe("when the locale's formatted date layout differs", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("still groups and orders by calendar date", () => {
+      // Some ICU/browser versions have formatted en-CA dates as "9/24/2026" rather than "2026-09-24".
+      class OtherLayout extends Intl.DateTimeFormat {
+        override format() {
+          return "9/24/2026";
+        }
+      }
+      vi.stubGlobal("Intl", { ...Intl, DateTimeFormat: OtherLayout });
+
+      const schedule = groupReviewSchedule(
+        [review("Later", "2026-10-02T10:00:00Z"), review("Sooner", "2026-09-25T10:00:00Z"), review("Due", "2026-09-20T10:00:00Z")],
+        { now: NOW, timeZone: "UTC" },
+      );
+
+      expect(schedule.dueNow.map((r) => r.conceptName)).toEqual(["Due"]);
+      expect(schedule.upcoming.map((g) => [g.date, g.reviews.map((r) => r.conceptName)])).toEqual([
+        ["2026-09-25", ["Sooner"]],
+        ["2026-10-02", ["Later"]],
+      ]);
+      expect(schedule.upcoming[0].label).toBe("Tomorrow");
+    });
   });
 
   it("returns empty groups when nothing is scheduled", () => {

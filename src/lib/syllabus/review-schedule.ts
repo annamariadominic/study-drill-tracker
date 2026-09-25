@@ -51,12 +51,20 @@ export function listScheduledReviews(studiedConcepts: StudiedConcept[]): Schedul
   );
 }
 
-/** `YYYY-MM-DD` for the calendar date `instant` falls on in `timeZone`. */
+/**
+ * `YYYY-MM-DD` for the calendar date `instant` falls on in `timeZone`. Built
+ * from the formatter's parts rather than its formatted string, whose layout
+ * varies by locale data and browser.
+ */
 function calendarDate(instant: Date, timeZone: string): string {
-  // en-CA formats dates as YYYY-MM-DD.
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
-    instant,
-  );
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("year").padStart(4, "0")}-${part("month").padStart(2, "0")}-${part("day").padStart(2, "0")}`;
 }
 
 /** Whole days from calendar date `from` to calendar date `to`, both `YYYY-MM-DD`. */
