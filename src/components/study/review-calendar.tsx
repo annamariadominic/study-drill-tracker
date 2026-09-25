@@ -11,13 +11,13 @@ import { ReviewRows } from "./review-schedule-list";
 import { useLearnerTimeZone } from "./use-learner-time-zone";
 
 const WEEKDAYS = [
-  ["S", "Sunday"],
   ["M", "Monday"],
   ["T", "Tuesday"],
   ["W", "Wednesday"],
   ["T", "Thursday"],
   ["F", "Friday"],
   ["S", "Saturday"],
+  ["S", "Sunday"],
 ] as const;
 
 /** How many Concept names a day shows on wide screens before "+N more". */

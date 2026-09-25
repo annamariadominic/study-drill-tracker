@@ -12,7 +12,7 @@ export type CalendarDay = {
 export type ReviewCalendarMonth = {
   /** e.g. "September 2026". */
   label: string;
-  /** Sunday-first weeks; `null` pads the days outside this month. */
+  /** Monday-first weeks; `null` pads the days outside this month. */
   weeks: (CalendarDay | null)[][];
   /** Reviews that fell due before today. They'd sit in past days, so they're surfaced separately. */
   overdue: ScheduledReview[];
@@ -24,7 +24,7 @@ function pad(value: number, length = 2) {
 
 /**
  * The month `monthOffset` months from the current one, in `timeZone`, laid
- * out as Sunday-first weeks with each review on its calendar date. Reviews
+ * out as Monday-first weeks with each review on its calendar date. Reviews
  * due before today are returned as `overdue` rather than placed in past days;
  * reviews due earlier today sit on today.
  */
@@ -52,7 +52,9 @@ export function buildReviewCalendar(
     }
   }
 
-  const cells: (CalendarDay | null)[] = Array.from({ length: firstOfMonth.getUTCDay() }, () => null);
+  // getUTCDay counts from Sunday (0); shift so Monday leads the week.
+  const leadingDays = (firstOfMonth.getUTCDay() + 6) % 7;
+  const cells: (CalendarDay | null)[] = Array.from({ length: leadingDays }, () => null);
   for (let day = 1; day <= daysInMonth; day++) {
     const date = `${pad(year, 4)}-${pad(month + 1)}-${pad(day)}`;
     cells.push({ date, dayOfMonth: day, isToday: date === today, reviews: byDate.get(date) ?? [] });

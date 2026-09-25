@@ -23,13 +23,23 @@ function day(weeks: (CalendarDay | null)[][], date: string) {
 }
 
 describe("buildReviewCalendar", () => {
-  it("lays out the current month as Sunday-first weeks", () => {
+  it("lays out the current month as Monday-first weeks", () => {
     const { label, weeks } = buildReviewCalendar([], { now: NOW, timeZone: "UTC" });
 
     expect(label).toBe("September 2026");
     expect(weeks.every((week) => week.length === 7)).toBe(true);
-    // Sep 1 2026 is a Tuesday, so the first week starts with Sunday and Monday padded out.
-    expect(weeks[0].slice(0, 3).map((d) => d?.date ?? null)).toEqual([null, null, "2026-09-01"]);
+    // Sep 1 2026 is a Tuesday, so the first week starts with Monday padded out.
+    expect(weeks[0].slice(0, 2).map((d) => d?.date ?? null)).toEqual([null, "2026-09-01"]);
+    // Sep 30 is a Wednesday, so the last week ends with Thursday to Sunday padded out.
+    expect(weeks.at(-1)?.map((d) => d?.date ?? null)).toEqual([
+      "2026-09-28",
+      "2026-09-29",
+      "2026-09-30",
+      null,
+      null,
+      null,
+      null,
+    ]);
     expect(days(weeks).map((d) => d.dayOfMonth)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
     expect(days(weeks).filter((d) => d.isToday).map((d) => d.date)).toEqual(["2026-09-24"]);
   });
@@ -72,6 +82,8 @@ describe("buildReviewCalendar", () => {
     expect(january.label).toBe("January 2027");
     expect(day(january.weeks, "2027-01-05")?.reviews.map((r) => r.conceptName)).toEqual(["Next year"]);
     expect(days(january.weeks)).toHaveLength(31);
+    // Jan 1 2027 is a Friday: four padding days, Monday to Thursday.
+    expect(january.weeks[0].map((d) => d?.dayOfMonth ?? null)).toEqual([null, null, null, null, 1, 2, 3]);
   });
 
   it("uses the time zone for today and for each review's date", () => {
