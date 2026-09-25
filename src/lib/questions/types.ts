@@ -1,6 +1,8 @@
 /** Recall and flashcard Questions ask about one Concept; a scenario combines several. */
 export type SingleConceptQuestionType = "recall" | "flashcard";
 export type QuestionType = SingleConceptQuestionType | "scenario";
+/** The Question types answered in the learner's own words and graded by the LLM. */
+export type FreeTextQuestionType = Exclude<QuestionType, "flashcard">;
 export type Correctness = "correct" | "partial" | "incorrect";
 export type Confidence = "guessed" | "partial" | "confident";
 
@@ -30,5 +32,11 @@ export type Attempt = {
   confidence: Confidence;
   correctness: Correctness;
   gradedExplanation: string;
+  /**
+   * What a strong answer would have said, written by the grader for a recall
+   * or scenario Question. null for a flashcard (the correct option is on the
+   * Question) and for Attempts graded before reference answers existed.
+   */
+  referenceAnswer: string | null;
   createdAt: string;
 };

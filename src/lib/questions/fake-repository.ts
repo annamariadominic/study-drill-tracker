@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assertQuestionConcepts } from "./concepts";
-import type { CreateQuestionInput, QuestionsRepository } from "./repository";
-import type { Attempt, Confidence, Correctness, Question } from "./types";
+import type { CreateAttemptInput, CreateQuestionInput, QuestionsRepository } from "./repository";
+import type { Attempt, Question } from "./types";
 
 export class FakeQuestionsRepository implements QuestionsRepository {
   private questions = new Map<string, Question>();
@@ -44,13 +44,7 @@ export class FakeQuestionsRepository implements QuestionsRepository {
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   }
 
-  async createAttempt(input: {
-    questionId: string;
-    submittedAnswer: string;
-    confidence: Confidence;
-    correctness: Correctness;
-    gradedExplanation: string;
-  }): Promise<Attempt> {
+  async createAttempt(input: CreateAttemptInput): Promise<Attempt> {
     const attempt: Attempt = {
       id: randomUUID(),
       questionId: input.questionId,
@@ -58,6 +52,7 @@ export class FakeQuestionsRepository implements QuestionsRepository {
       confidence: input.confidence,
       correctness: input.correctness,
       gradedExplanation: input.gradedExplanation,
+      referenceAnswer: input.referenceAnswer ?? null,
       createdAt: new Date().toISOString(),
     };
     this.attempts.set(attempt.id, attempt);

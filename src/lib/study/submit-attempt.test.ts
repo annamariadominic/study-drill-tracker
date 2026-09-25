@@ -3,6 +3,7 @@ import { FakeQuestionsRepository } from "@/lib/questions/fake-repository";
 import { NotFoundError as QuestionsNotFoundError } from "@/lib/questions/errors";
 import { FakeLlmPort } from "@/lib/llm/fake-port";
 import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
+import { scheduleFromFields, scheduleNextReview } from "./scheduling";
 import { submitAttempt } from "./submit-attempt";
 
 async function buildStudiedConcept(syllabusRepo: FakeSyllabusRepository) {
@@ -64,6 +65,7 @@ describe("submitAttempt", () => {
     const llmPort = new FakeLlmPort(undefined, async () => ({
       correctness: "partial",
       explanation: "Close, but missing detail.",
+      referenceAnswer: "Repeating it has the same effect as doing it once.",
     }));
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
@@ -80,6 +82,135 @@ describe("submitAttempt", () => {
     expect(attempt.correctness).toBe("partial");
     expect(attempt.gradedExplanation).toBe("Close, but missing detail.");
     expect(llmPort.gradeAnswerCallCount).toBe(1);
+  });
+
+  it("persists the reference answer for a partial recall answer", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort(undefined, async () => ({
+      correctness: "partial",
+      explanation: "You named retries but not why they're safe.",
+      referenceAnswer: "An idempotent operation has the same effect however many times it runs.",
+    }));
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptIds: [concept.id],
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+
+    const attempt = await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
+    );
+
+    expect(attempt.referenceAnswer).toBe(
+      "An idempotent operation has the same effect however many times it runs.",
+    );
+    expect((await questionsRepo.getAttempt(attempt.id))?.referenceAnswer).toBe(attempt.referenceAnswer);
+  });
+
+  it("persists the reference answer for an incorrect recall answer", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort(undefined, async () => ({
+      correctness: "incorrect",
+      explanation: "That describes caching, not idempotency.",
+      referenceAnswer: "An idempotent operation has the same effect however many times it runs.",
+    }));
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptIds: [concept.id],
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+
+    const attempt = await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "confident", submittedAnswer: "Storing results for later." },
+    );
+
+    expect(attempt.correctness).toBe("incorrect");
+    expect((await questionsRepo.getAttempt(attempt.id))?.referenceAnswer).toBe(
+      "An idempotent operation has the same effect however many times it runs.",
+    );
+  });
+
+  it("gives the grader the Question's type and the Concept it was written from", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+    await syllabusRepo.updateConcept(concept.id, { notes: "Safe to retry; use idempotency keys." });
+    const question = await questionsRepo.createQuestion({
+      conceptIds: [concept.id],
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
+    );
+
+    expect(llmPort.gradeAnswerInputs).toEqual([
+      {
+        question: { type: "recall", prompt: "Explain idempotency." },
+        concepts: [{ name: "Idempotency", notes: "Safe to retry; use idempotency keys." }],
+        submittedAnswer: "Retrying is safe.",
+      },
+    ]);
+  });
+
+  it("schedules from correctness and confidence alone, whatever the reference answer says", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort(undefined, async () => ({
+      correctness: "partial",
+      explanation: "Missing the key idea.",
+      referenceAnswer: "A long model answer that has no bearing on scheduling.",
+    }));
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptIds: [concept.id],
+      type: "recall",
+      prompt: "Explain idempotency.",
+    });
+
+    await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
+    );
+
+    const expected = scheduleNextReview(scheduleFromFields(concept)!, {
+      correctness: "partial",
+      confidence: "partial",
+    });
+    const updated = await syllabusRepo.getConcept(concept.id);
+    expect(updated?.reviewIntervalDays).toBe(expected.intervalDays);
+    expect(updated?.reviewEaseFactor).toBe(expected.easeFactor);
+  });
+
+  it("stores no reference answer for a flashcard, which shows its correct option instead", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const llmPort = new FakeLlmPort();
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptIds: [concept.id],
+      type: "flashcard",
+      prompt: "Pick the best definition.",
+      options: ["Correct one", "Wrong one"],
+      correctOptionIndex: 0,
+    });
+
+    const attempt = await submitAttempt(
+      { questionsRepo, syllabusRepo, llmPort },
+      { questionId: question.id, confidence: "guessed", selectedOptionIndex: 1 },
+    );
+
+    expect(attempt.referenceAnswer).toBeNull();
+    expect(attempt.gradedExplanation).toBe('Not quite — the correct answer is "Correct one".');
   });
 
   it("rejects a flashcard selectedOptionIndex that is out of range", async () => {
@@ -398,6 +529,7 @@ describe("submitAttempt", () => {
       const llmPort = new FakeLlmPort(undefined, async () => ({
         correctness: "partial",
         explanation: "Covers the queue but not the latency budget.",
+        referenceAnswer: "Queue requests, batch them within the latency budget, and shed load past it.",
       }));
       const [queues, latency] = await buildScenarioConcepts(syllabusRepo);
       const scenario = await questionsRepo.createQuestion({
@@ -416,6 +548,16 @@ describe("submitAttempt", () => {
       expect(llmPort.gradeAnswerCallCount).toBe(1);
       expect(attempt.correctness).toBe("partial");
       expect(attempt.submittedAnswer).toBe("Put a queue in front.");
+      expect(attempt.referenceAnswer).toBe(
+        "Queue requests, batch them within the latency budget, and shed load past it.",
+      );
+      expect(llmPort.gradeAnswerInputs[0]).toMatchObject({
+        question: { type: "scenario" },
+        concepts: [
+          { name: "Queues", notes: null },
+          { name: "Model latency", notes: null },
+        ],
+      });
     });
 
     it("advances every Concept the scenario combined when the Drill asks nothing else about them", async () => {

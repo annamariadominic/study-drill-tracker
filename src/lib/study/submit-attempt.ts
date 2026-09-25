@@ -1,4 +1,4 @@
-import type { LlmPort } from "@/lib/llm/port";
+import type { LlmPort, QuestionConcept } from "@/lib/llm/port";
 import { NotFoundError } from "@/lib/questions/errors";
 import type { QuestionsRepository } from "@/lib/questions/repository";
 import type { Attempt, Confidence, Correctness, Question } from "@/lib/questions/types";
@@ -48,6 +48,15 @@ async function conceptsToAdvance(
   });
 }
 
+/** The Concepts a Question asks about, as the grader sees them. */
+async function gradingConcepts(
+  syllabusRepo: SyllabusRepository,
+  question: Question,
+): Promise<QuestionConcept[]> {
+  const concepts = await Promise.all(question.conceptIds.map((conceptId) => syllabusRepo.getConcept(conceptId)));
+  return concepts.flatMap((concept) => (concept ? [{ name: concept.name, notes: concept.notes }] : []));
+}
+
 export async function submitAttempt(
   deps: { questionsRepo: QuestionsRepository; syllabusRepo: SyllabusRepository; llmPort: LlmPort },
   input: {
@@ -68,6 +77,7 @@ export async function submitAttempt(
 
   let correctness: Correctness;
   let gradedExplanation: string;
+  let referenceAnswer: string | null = null;
   let submittedAnswer: string;
 
   if (question.type === "flashcard") {
@@ -90,11 +100,13 @@ export async function submitAttempt(
   } else {
     submittedAnswer = input.submittedAnswer ?? "";
     const graded = await deps.llmPort.gradeAnswer({
-      prompt: question.prompt,
+      question: { type: question.type, prompt: question.prompt },
+      concepts: await gradingConcepts(deps.syllabusRepo, question),
       submittedAnswer,
     });
     correctness = graded.correctness;
     gradedExplanation = graded.explanation;
+    referenceAnswer = graded.referenceAnswer;
   }
 
   const attempt = await deps.questionsRepo.createAttempt({
@@ -103,6 +115,7 @@ export async function submitAttempt(
     confidence: input.confidence,
     correctness,
     gradedExplanation,
+    referenceAnswer,
   });
 
   await Promise.all(

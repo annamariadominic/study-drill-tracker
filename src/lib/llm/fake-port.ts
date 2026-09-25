@@ -1,4 +1,10 @@
-import type { GenerateQuestionInput, GeneratedQuestion, GradedAnswer, LlmPort } from "./port";
+import type {
+  GenerateQuestionInput,
+  GeneratedQuestion,
+  GradeAnswerInput,
+  GradedAnswer,
+  LlmPort,
+} from "./port";
 
 function defaultGenerateQuestion(input: GenerateQuestionInput): GeneratedQuestion {
   const names = input.concepts.map((concept) => concept.name);
@@ -17,12 +23,18 @@ function defaultGenerateQuestion(input: GenerateQuestionInput): GeneratedQuestio
 }
 
 function defaultGradeAnswer(): GradedAnswer {
-  return { correctness: "correct", explanation: "Looks right to me." };
+  return {
+    correctness: "correct",
+    explanation: "Looks right to me.",
+    referenceAnswer: "A strong answer would cover the key points.",
+  };
 }
 
 export class FakeLlmPort implements LlmPort {
   generateQuestionCallCount = 0;
   gradeAnswerCallCount = 0;
+  /** What each gradeAnswer call was given, in order. */
+  gradeAnswerInputs: GradeAnswerInput[] = [];
 
   constructor(
     private readonly generateQuestionImpl: LlmPort["generateQuestion"] = async (input) =>
@@ -35,8 +47,9 @@ export class FakeLlmPort implements LlmPort {
     return this.generateQuestionImpl(input);
   }
 
-  async gradeAnswer(input: { prompt: string; submittedAnswer: string }): Promise<GradedAnswer> {
+  async gradeAnswer(input: GradeAnswerInput): Promise<GradedAnswer> {
     this.gradeAnswerCallCount += 1;
+    this.gradeAnswerInputs.push(input);
     return this.gradeAnswerImpl(input);
   }
 }

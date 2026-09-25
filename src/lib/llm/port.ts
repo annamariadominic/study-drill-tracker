@@ -1,4 +1,4 @@
-import type { Correctness, QuestionType } from "@/lib/questions/types";
+import type { Correctness, FreeTextQuestionType, QuestionType } from "@/lib/questions/types";
 
 export type GeneratedQuestion =
   | { type: "recall"; prompt: string }
@@ -7,7 +7,13 @@ export type GeneratedQuestion =
 
 export type GradedAnswer = {
   correctness: Correctness;
+  /** Why the answer earned its grade. */
   explanation: string;
+  /**
+   * What a strong answer would have said, stated on its own so the learner
+   * always has something to study from, whatever the grade.
+   */
+  referenceAnswer: string;
 };
 
 /** A Concept as the LLM sees it when writing a Question. */
@@ -25,8 +31,18 @@ export type GenerateQuestionInput = {
   type: QuestionType;
 };
 
+/**
+ * A free-text answer to grade, with the Concepts its Question was written
+ * from so the reference answer is grounded in the learner's own material.
+ */
+export type GradeAnswerInput = {
+  question: { type: FreeTextQuestionType; prompt: string };
+  concepts: QuestionConcept[];
+  submittedAnswer: string;
+};
+
 export interface LlmPort {
   generateQuestion(input: GenerateQuestionInput): Promise<GeneratedQuestion>;
 
-  gradeAnswer(input: { prompt: string; submittedAnswer: string }): Promise<GradedAnswer>;
+  gradeAnswer(input: GradeAnswerInput): Promise<GradedAnswer>;
 }

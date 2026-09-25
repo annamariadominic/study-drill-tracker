@@ -21,8 +21,17 @@ export function listNames(names: string[]) {
 }
 
 /**
+ * A scenario sets up a whole situation, so it runs much longer than a recall
+ * prompt. It stays in the reading face but a size down, with more leading and
+ * a prose measure, so a long setup can be scanned rather than filling the
+ * screen.
+ */
+const SCENARIO_PROMPT_TYPE = "max-w-prose text-base leading-[1.7] sm:text-lg sm:leading-[1.7]";
+
+/**
  * The Question itself, set large in the reading face: the one thing on the
- * screen that should hold attention.
+ * screen that should hold attention. A scenario gets a smaller, more readable
+ * size for its longer prose (SCENARIO_PROMPT_TYPE).
  */
 export function QuestionPrompt({
   question,
@@ -50,7 +59,10 @@ export function QuestionPrompt({
       </p>
       <h1
         className={cn(
-          "font-serif text-[1.375rem] leading-[1.45] font-normal tracking-[-0.005em] text-pretty transition-colors sm:text-[1.75rem] sm:leading-[1.4]",
+          "font-serif font-normal tracking-[-0.005em] text-pretty whitespace-pre-line transition-colors",
+          question.type === "scenario"
+            ? SCENARIO_PROMPT_TYPE
+            : "text-[1.375rem] leading-[1.45] sm:text-[1.75rem] sm:leading-[1.4]",
           muted ? "text-muted" : "text-text",
         )}
       >
@@ -121,7 +133,10 @@ export function AnswerForm({
   );
 }
 
-/** How an Attempt was graded: the outcome, what was answered, and why. */
+/**
+ * How an Attempt was graded: the outcome, what was answered, why, and — for a
+ * free-text Question — what a strong answer would have said.
+ */
 export function AttemptFeedback({
   question,
   attempt,
@@ -162,6 +177,8 @@ export function AttemptFeedback({
           <p className="max-w-prose font-serif text-lg leading-relaxed text-text">{attempt.gradedExplanation}</p>
         </div>
       ) : null}
+
+      {!isFlashcard && attempt.referenceAnswer ? <ReferenceAnswer text={attempt.referenceAnswer} /> : null}
 
       {next ? <div className="border-t border-line pt-6">{next}</div> : null}
     </section>
@@ -204,5 +221,22 @@ function FlashcardReview({ attempt, correctOption }: { attempt: Attempt; correct
         </div>
       ) : null}
     </dl>
+  );
+}
+
+/**
+ * The grader's model answer to a free-text Question, shown whatever the grade
+ * so the learner always has the target to study from. Attempts graded before
+ * reference answers existed have none, and show no section.
+ */
+function ReferenceAnswer({ text }: { text: string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-control border border-line px-4 py-3">
+      <p className="flex items-center gap-1 text-xs font-medium text-correct">
+        <Check aria-hidden className="size-3.5" />
+        A strong answer
+      </p>
+      <p className="max-w-prose text-sm leading-relaxed whitespace-pre-wrap text-text">{text}</p>
+    </div>
   );
 }

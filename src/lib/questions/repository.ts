@@ -1,5 +1,14 @@
 import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
 
+export type CreateAttemptInput = {
+  questionId: string;
+  submittedAnswer: string;
+  confidence: Confidence;
+  correctness: Correctness;
+  gradedExplanation: string;
+  referenceAnswer?: string | null;
+};
+
 export type CreateQuestionInput = {
   conceptIds: string[];
   type: QuestionType;
@@ -22,13 +31,7 @@ export interface QuestionsRepository {
   /** Questions of one Drill, in the order they should be asked. */
   listDrillQuestions(drillId: string): Promise<Question[]>;
 
-  createAttempt(input: {
-    questionId: string;
-    submittedAnswer: string;
-    confidence: Confidence;
-    correctness: Correctness;
-    gradedExplanation: string;
-  }): Promise<Attempt>;
+  createAttempt(input: CreateAttemptInput): Promise<Attempt>;
   getAttempt(id: string): Promise<Attempt | null>;
   listAttemptsForQuestions(questionIds: string[]): Promise<Attempt[]>;
 }
