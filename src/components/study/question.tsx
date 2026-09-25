@@ -21,8 +21,17 @@ export function listNames(names: string[]) {
 }
 
 /**
+ * A scenario sets up a whole situation, so it runs much longer than a recall
+ * prompt. It stays in the reading face but a size down, with more leading and
+ * a prose measure, so a long setup can be scanned rather than filling the
+ * screen.
+ */
+const SCENARIO_PROMPT_TYPE = "max-w-prose text-base leading-[1.7] sm:text-lg sm:leading-[1.7]";
+
+/**
  * The Question itself, set large in the reading face: the one thing on the
- * screen that should hold attention.
+ * screen that should hold attention. A scenario gets a smaller, more readable
+ * size for its longer prose (SCENARIO_PROMPT_TYPE).
  */
 export function QuestionPrompt({
   question,
@@ -50,7 +59,10 @@ export function QuestionPrompt({
       </p>
       <h1
         className={cn(
-          "font-serif text-[1.375rem] leading-[1.45] font-normal tracking-[-0.005em] text-pretty transition-colors sm:text-[1.75rem] sm:leading-[1.4]",
+          "font-serif font-normal tracking-[-0.005em] text-pretty whitespace-pre-line transition-colors",
+          question.type === "scenario"
+            ? SCENARIO_PROMPT_TYPE
+            : "text-[1.375rem] leading-[1.45] sm:text-[1.75rem] sm:leading-[1.4]",
           muted ? "text-muted" : "text-text",
         )}
       >

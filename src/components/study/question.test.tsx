@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Attempt, Question, QuestionType } from "@/lib/questions/types";
-import { AttemptFeedback } from "./question";
+import { AttemptFeedback, QuestionPrompt } from "./question";
 
 function question(type: QuestionType, overrides: Partial<Question> = {}): Question {
   return {
@@ -105,5 +105,39 @@ describe("AttemptFeedback", () => {
     expect(text).toContain("Correct answer Right");
     expect(text).toContain('Feedback Not quite — the correct answer is "Right".');
     expect(text).not.toContain("A strong answer");
+  });
+});
+
+describe("QuestionPrompt", () => {
+  function headingClass(q: Question) {
+    const markup = renderToStaticMarkup(<QuestionPrompt question={q} number={3} scenarioConcepts={["Queues", "Latency"]} />);
+    return markup.match(/<h1 class="([^"]*)"/)?.[1].split(" ") ?? [];
+  }
+
+  it("sets a scenario at a smaller, readable size within a prose measure", () => {
+    const classes = headingClass(question("scenario"));
+
+    expect(classes).toEqual(expect.arrayContaining(["font-serif", "text-base", "sm:text-lg", "max-w-prose"]));
+    expect(classes).not.toContain("sm:text-[1.75rem]");
+  });
+
+  it("keeps recall at the large Question size", () => {
+    const classes = headingClass(question("recall"));
+
+    expect(classes).toEqual(expect.arrayContaining(["text-[1.375rem]", "sm:text-[1.75rem]"]));
+    expect(classes).not.toContain("max-w-prose");
+  });
+
+  it("still labels a scenario with its number and the Concepts it combines, and shows the whole prompt", () => {
+    const prompt = "A long setup. ".repeat(40).trim();
+    const text = textOf(
+      renderToStaticMarkup(
+        <QuestionPrompt question={question("scenario", { prompt })} number={5} scenarioConcepts={["Queues", "Latency"]} />,
+      ),
+    );
+
+    expect(text).toContain("Question 5");
+    expect(text).toContain("Scenario combining Queues and Latency");
+    expect(text).toContain(prompt);
   });
 });
