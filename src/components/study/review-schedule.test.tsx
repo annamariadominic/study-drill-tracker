@@ -97,3 +97,59 @@ describe("ReviewSchedule", () => {
     expect(text(html)).toContain("Load balancing");
   });
 });
+
+describe("ReviewSchedule calendar view", () => {
+  function renderCalendar(reviews: ScheduledReview[]) {
+    return renderToStaticMarkup(
+      <ReviewSchedule reviews={reviews} now={NOW.toISOString()} hasStudiedConcepts view="calendar" />,
+    );
+  }
+
+  it("shows the current month with reviews on their days and the first upcoming day listed", () => {
+    const html = renderCalendar([
+      review("Prompt chaining", "2026-09-25T10:00:00Z", { subjectName: "Foundations", domainName: "AI Engineering" }),
+      review("Load balancing", "2026-09-27T10:00:00Z"),
+      review("Caching", "2026-09-27T11:00:00Z"),
+      review("Retries", "2026-09-27T12:00:00Z"),
+    ]);
+    const content = text(html);
+
+    expect(content).toContain("September 2026");
+    expect(html).toContain('aria-label="Friday, September 25: 1 review"');
+    expect(html).toContain('aria-label="Sunday, September 27: 3 reviews"');
+    expect(content).toContain("+1 more");
+    // The first day with reviews is selected, and its reviews are listed with Subject and Domain.
+    expect(html).toMatch(/aria-pressed="true" aria-label="Friday, September 25/);
+    expect(content).toContain("Friday, September 25 1 Concept Prompt chaining AI Engineering › Foundations");
+    // Nothing is shown before the current month, so there's no going back from it.
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Previous month"/);
+  });
+
+  it("surfaces overdue reviews above the calendar instead of on past days", () => {
+    const html = renderCalendar([
+      review("Overdue", "2026-09-20T10:00:00Z"),
+      review("Earlier today", "2026-09-24T08:00:00Z"),
+    ]);
+    const content = text(html);
+
+    expect(content).toContain("1 Concept overdue from before today.");
+    expect(html).toContain('href="/study/due"');
+    expect(html).toContain('aria-label="Today, Thursday, September 24: 1 review"');
+    expect(html).not.toContain('aria-label="Sunday, September 20');
+  });
+
+  it("says when the month has nothing scheduled", () => {
+    const content = text(renderCalendar([review("Next month", "2026-10-02T10:00:00Z")]));
+
+    expect(content).toContain("No reviews scheduled in September 2026.");
+  });
+
+  it("shows the list's empty state when nothing is scheduled", () => {
+    const html = renderToStaticMarkup(
+      <ReviewSchedule reviews={[]} now={NOW.toISOString()} hasStudiedConcepts={false} view="calendar" />,
+    );
+
+    expect(text(html)).toContain("Nothing scheduled yet");
+    expect(html).not.toContain("<table");
+  });
+});

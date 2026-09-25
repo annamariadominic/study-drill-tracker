@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, Library, NotebookPen, Shuffle } from "lucide-react";
+import { CalendarClock, CalendarDays, Library, NotebookPen, Shuffle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -17,6 +17,12 @@ const STUDY_LINKS = [
   },
   { href: "/study/due", label: "Due for review", icon: CalendarClock, isActive: (path: string) => path === "/study/due" },
   { href: "/study/random", label: "Random Drill", icon: Shuffle, isActive: (path: string) => path === "/study/random" },
+  {
+    href: "/study/schedule",
+    label: "Review schedule",
+    icon: CalendarDays,
+    isActive: (path: string) => path === "/study/schedule",
+  },
 ];
 
 /** The app's navigation: the study screens, then the syllabus with its Domains. */
