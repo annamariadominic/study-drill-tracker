@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertQuestionConcepts } from "./concepts";
-import type { CreateQuestionInput, QuestionsRepository } from "./repository";
+import type { CreateAttemptInput, CreateQuestionInput, QuestionsRepository } from "./repository";
 import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
 
 type QuestionRow = {
@@ -28,6 +28,7 @@ type AttemptRow = {
   confidence: Confidence;
   correctness: Correctness;
   graded_explanation: string;
+  reference_answer: string | null;
   created_at: string;
 };
 
@@ -65,6 +66,7 @@ function toAttempt(row: AttemptRow): Attempt {
     confidence: row.confidence,
     correctness: row.correctness,
     gradedExplanation: row.graded_explanation,
+    referenceAnswer: row.reference_answer,
     createdAt: row.created_at,
   };
 }
@@ -125,13 +127,7 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
     return (data as QuestionWithConceptsRow[]).map(toQuestionWithConcepts);
   }
 
-  async createAttempt(input: {
-    questionId: string;
-    submittedAnswer: string;
-    confidence: Confidence;
-    correctness: Correctness;
-    gradedExplanation: string;
-  }): Promise<Attempt> {
+  async createAttempt(input: CreateAttemptInput): Promise<Attempt> {
     const { data, error } = await this.client
       .from("attempts")
       .insert({
@@ -140,6 +136,7 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
         confidence: input.confidence,
         correctness: input.correctness,
         graded_explanation: input.gradedExplanation,
+        reference_answer: input.referenceAnswer ?? null,
       })
       .select()
       .single();

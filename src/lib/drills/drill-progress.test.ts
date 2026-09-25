@@ -24,6 +24,7 @@ function attempt(id: string, questionId: string, correctness: Correctness): Atte
     confidence: "partial",
     correctness,
     gradedExplanation: "Because.",
+    referenceAnswer: null,
     createdAt: "2026-01-01T00:01:00.000Z",
   };
 }
