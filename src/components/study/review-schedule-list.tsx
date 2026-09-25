@@ -115,7 +115,7 @@ function ScheduleGroup({
 }
 
 /** One row per Concept; `note` adds a short trailing detail, e.g. when a due review fell due. */
-function ReviewRows({ reviews }: { reviews: (ScheduledReview & { note?: string })[] }) {
+export function ReviewRows({ reviews }: { reviews: (ScheduledReview & { note?: string })[] }) {
   return (
     <ul className="divide-y divide-line">
       {reviews.map((review) => (
