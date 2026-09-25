@@ -3,6 +3,7 @@ import { FakeQuestionsRepository } from "@/lib/questions/fake-repository";
 import { NotFoundError as QuestionsNotFoundError } from "@/lib/questions/errors";
 import { FakeLlmPort } from "@/lib/llm/fake-port";
 import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
+import { holdCalls } from "@/lib/testing/held-calls";
 import { scheduleFromFields, scheduleNextReview } from "./scheduling";
 import { submitAttempt } from "./submit-attempt";
 
@@ -684,5 +685,35 @@ describe("submitAttempt", () => {
         afterFirst?.reviewIntervalDays,
       );
     });
+  });
+
+  it("reads what the Attempt advances and what the grader needs together, not one after another", async () => {
+    const questionsRepo = new FakeQuestionsRepository();
+    const syllabusRepo = new FakeSyllabusRepository();
+    const concept = await buildStudiedConcept(syllabusRepo);
+    const question = await questionsRepo.createQuestion({
+      conceptIds: [concept.id],
+      type: "recall",
+      prompt: "Explain idempotency.",
+      drillId: "drill-1",
+      position: 0,
+    });
+
+    const held = holdCalls();
+    const submitting = submitAttempt(
+      {
+        questionsRepo: held.wrap(questionsRepo, ["listDrillQuestions", "listDrillAttempts"]),
+        syllabusRepo: held.wrap(syllabusRepo, ["getConcept"]),
+        llmPort: new FakeLlmPort(),
+      },
+      { questionId: question.id, confidence: "confident", submittedAnswer: "Same effect however often it runs." },
+    );
+    await held.settle();
+
+    expect([...held.started].sort()).toEqual(["getConcept", "listDrillAttempts", "listDrillQuestions"]);
+
+    held.release();
+    await submitting;
+    expect((await syllabusRepo.getConcept(concept.id))?.nextReviewDueAt).not.toBe(concept.nextReviewDueAt);
   });
 });

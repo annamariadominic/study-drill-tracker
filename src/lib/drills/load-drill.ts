@@ -15,15 +15,15 @@ export async function loadDrill(
   deps: { drillsRepo: DrillsRepository; questionsRepo: QuestionsRepository },
   drillId: string,
 ): Promise<LoadedDrill | null> {
-  const drill = await deps.drillsRepo.getDrill(drillId);
+  // All three only need the id, so they go out together rather than one after another.
+  const [drill, questions, attempts] = await Promise.all([
+    deps.drillsRepo.getDrill(drillId),
+    deps.questionsRepo.listDrillQuestions(drillId),
+    deps.questionsRepo.listDrillAttempts(drillId),
+  ]);
   if (!drill) {
     return null;
   }
-
-  const questions = await deps.questionsRepo.listDrillQuestions(drill.id);
-  const attempts = await deps.questionsRepo.listAttemptsForQuestions(
-    questions.map((question) => question.id),
-  );
 
   return { drill, progress: drillProgress(questions, attempts) };
 }

@@ -63,8 +63,9 @@ export class FakeQuestionsRepository implements QuestionsRepository {
     return this.attempts.get(id) ?? null;
   }
 
-  async listAttemptsForQuestions(questionIds: string[]): Promise<Attempt[]> {
-    const wanted = new Set(questionIds);
-    return [...this.attempts.values()].filter((attempt) => wanted.has(attempt.questionId));
+  async listDrillAttempts(drillId: string): Promise<Attempt[]> {
+    return [...this.attempts.values()].filter(
+      (attempt) => this.questions.get(attempt.questionId)?.drillId === drillId,
+    );
   }
 }

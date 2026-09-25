@@ -134,9 +134,11 @@ async function main() {
     await measure("Submit answer: reads before grading", async () => {
       const q = await questionsRepo.getQuestion(question.id);
       if (!q?.drillId) return;
-      const drillQuestions = await questionsRepo.listDrillQuestions(q.drillId);
-      await questionsRepo.listAttemptsForQuestions(drillQuestions.map(({ id }) => id));
-      await Promise.all(q.conceptIds.map((id) => syllabusRepo.getConcept(id)));
+      await Promise.all([
+        questionsRepo.listDrillQuestions(q.drillId),
+        questionsRepo.listDrillAttempts(q.drillId),
+        ...q.conceptIds.map((id) => syllabusRepo.getConcept(id)),
+      ]);
     });
     await measure("Submit answer: schedule read after grading", () =>
       Promise.all(question.conceptIds.map((id) => syllabusRepo.getConcept(id))),

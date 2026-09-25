@@ -154,16 +154,15 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
     return data ? toAttempt(data as AttemptRow) : null;
   }
 
-  async listAttemptsForQuestions(questionIds: string[]): Promise<Attempt[]> {
-    if (questionIds.length === 0) {
-      return [];
-    }
+  async listDrillAttempts(drillId: string): Promise<Attempt[]> {
+    // The inner join filters on the Question's Drill in the same request.
     const { data, error } = await this.client
       .from("attempts")
-      .select("*")
-      .in("question_id", questionIds)
+      .select("*, questions!inner(drill_id)")
+      .eq("questions.drill_id", drillId)
       .order("created_at", { ascending: true });
     if (error) throw error;
     return (data as AttemptRow[]).map(toAttempt);
   }
+
 }
