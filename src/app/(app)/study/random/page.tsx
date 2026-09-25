@@ -4,6 +4,7 @@ import { EmptyState, InlineAlert } from "@/components/ui/feedback";
 import { Field } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
+import { PendingLink } from "@/components/ui/pending-link";
 import { PendingSubmit } from "@/components/ui/pending-submit";
 import { buttonVariants } from "@/components/ui/button";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
@@ -86,7 +87,7 @@ export default async function RandomDrillPage({
             {SCOPES.map(({ value, label, description }) => {
               const current = value === scope;
               return (
-                <Link
+                <PendingLink
                   key={value}
                   href={`/study/random?scope=${value}`}
                   aria-current={current ? "page" : undefined}
@@ -95,13 +96,15 @@ export default async function RandomDrillPage({
                     current
                       ? "border-accent bg-accent-wash"
                       : "border-line hover:border-line-strong hover:bg-surface",
+                    // Only the search params change, so the route's loading.tsx doesn't show: pulse the picked one.
+                    "data-pending:animate-pulse data-pending:border-line-strong",
                   )}
                 >
                   <span className={cn("text-sm font-medium", current ? "text-accent-strong" : "text-text")}>
                     {label}
                   </span>
                   <span className="text-xs text-muted">{description}</span>
-                </Link>
+                </PendingLink>
               );
             })}
           </nav>

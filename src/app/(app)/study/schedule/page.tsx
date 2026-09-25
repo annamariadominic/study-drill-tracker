@@ -1,7 +1,7 @@
 import { CalendarDays, List, type LucideIcon } from "lucide-react";
-import Link from "next/link";
 import { ReviewSchedule, type ReviewScheduleView } from "@/components/study/review-schedule";
 import { PageHeader } from "@/components/ui/page-header";
+import { PendingLink } from "@/components/ui/pending-link";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listStudiedConcepts } from "@/lib/syllabus/list-studied-concepts";
 import { listScheduledReviews } from "@/lib/syllabus/review-schedule";
@@ -34,20 +34,22 @@ export default async function ReviewSchedulePage({
             {VIEWS.map(({ value, label, icon: Icon, href }) => {
               const current = value === view;
               return (
-                <Link
+                <PendingLink
                   key={value}
                   href={href}
+                  icon={<Icon aria-hidden />}
+                  iconPosition="start"
+                  pendingLabel={`Loading the ${label.toLowerCase()} view…`}
                   aria-current={current ? "page" : undefined}
                   className={cn(
-                    "inline-flex h-8 items-center gap-1.5 rounded-control border px-3 text-xs font-medium transition-colors duration-150",
+                    "inline-flex h-8 items-center gap-1.5 rounded-control border px-3 text-xs font-medium transition-colors duration-150 [&_svg]:size-3.5 [&_svg]:shrink-0",
                     current
                       ? "border-accent bg-accent-wash text-accent-strong"
                       : "border-line text-muted hover:border-line-strong hover:bg-surface hover:text-text",
                   )}
                 >
-                  <Icon aria-hidden className="size-3.5" />
                   {label}
-                </Link>
+                </PendingLink>
               );
             })}
           </nav>

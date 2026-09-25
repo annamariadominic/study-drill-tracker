@@ -1,9 +1,9 @@
-import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { conceptList, DrillFrame, DrillResults } from "@/components/study/drill";
 import { AnswerForm, AttemptFeedback, QuestionPrompt } from "@/components/study/question";
-import { NextStepIcon } from "@/components/study/next-step-icon";
 import { buttonVariants } from "@/components/ui/button";
+import { PendingLink } from "@/components/ui/pending-link";
 import { getDrillsRepository } from "@/lib/drills/get-repository";
 import { drillConceptNames, loadDrill } from "@/lib/drills/load-drill";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
@@ -58,13 +58,14 @@ export default async function DrillPage({
           question={question}
           attempt={attempt}
           next={
-            <Link
+            <PendingLink
               href={`/study/drills/${drill.id}`}
+              icon={<ArrowRight aria-hidden />}
+              pendingLabel={progress.completed ? "Loading your results…" : "Loading the next question…"}
               className={cn(buttonVariants({ size: "lg" }), "w-full sm:w-auto")}
             >
               {progress.completed ? "See your results" : "Next question"}
-              <NextStepIcon />
-            </Link>
+            </PendingLink>
           }
         />
       </DrillFrame>
