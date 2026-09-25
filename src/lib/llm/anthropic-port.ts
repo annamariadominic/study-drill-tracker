@@ -29,13 +29,18 @@ export type CallType = "writeRecall" | "writeFlashcard" | "writeScenario" | "gra
 
 export type LlmSettings = Record<CallType, ModelSettings>;
 
-/** What every call used before settings were split by call type: Opus 5, defaults. */
-export const CURRENT_SETTINGS: LlmSettings = {
-  writeRecall: { model: "claude-opus-5" },
-  writeFlashcard: { model: "claude-opus-5" },
-  writeScenario: { model: "claude-opus-5" },
-  gradeRecall: { model: "claude-opus-5" },
-  gradeScenario: { model: "claude-opus-5" },
+/**
+ * The settings the learner chose from a side-by-side on their own material
+ * (ADR 0010): Haiku 4.5 wherever it held up, which it did for recall and
+ * flashcard Questions and for grading, and Sonnet 5 at low effort for
+ * scenarios, which need more reasoning to write.
+ */
+export const LLM_SETTINGS: LlmSettings = {
+  writeRecall: { model: "claude-haiku-4-5" },
+  writeFlashcard: { model: "claude-haiku-4-5" },
+  writeScenario: { model: "claude-sonnet-5", effort: "low" },
+  gradeRecall: { model: "claude-haiku-4-5" },
+  gradeScenario: { model: "claude-haiku-4-5" },
 };
 
 const FAST_MODE_BETA = "fast-mode-2026-02-01";
@@ -92,7 +97,7 @@ function describeConcepts(concepts: QuestionConcept[]): string {
 export class AnthropicLlmPort implements LlmPort {
   constructor(
     private readonly client: Anthropic,
-    private readonly settings: LlmSettings = CURRENT_SETTINGS,
+    private readonly settings: LlmSettings = LLM_SETTINGS,
   ) {}
 
   async generateQuestion(input: GenerateQuestionInput): Promise<GeneratedQuestion> {

@@ -1,6 +1,6 @@
 import Anthropic, { RateLimitError } from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
-import { AnthropicLlmPort, CURRENT_SETTINGS, type LlmSettings } from "./anthropic-port";
+import { AnthropicLlmPort, LLM_SETTINGS, type LlmSettings } from "./anthropic-port";
 
 type Call = { endpoint: "standard" | "beta"; params: Record<string, unknown> };
 
@@ -27,23 +27,33 @@ const graded = { correctness: "partial", explanation: "Missed retries.", referen
 
 function portWith(settings: Partial<LlmSettings>, output: unknown = { prompt: "Explain idempotency." }, options = {}) {
   const fake = fakeClient(output, options);
-  return { port: new AnthropicLlmPort(fake.client, { ...CURRENT_SETTINGS, ...settings }), calls: fake.calls };
+  return { port: new AnthropicLlmPort(fake.client, { ...LLM_SETTINGS, ...settings }), calls: fake.calls };
 }
 
 describe("AnthropicLlmPort", () => {
-  it("by default sends every call type to Opus 5 at standard speed with its default effort, as before", async () => {
-    const { port, calls } = portWith({});
+  it("by default writes recall and flashcard Questions and grades on Haiku, and scenarios on Sonnet at low effort", async () => {
+    const fake = fakeClient({ prompt: "Q", options: ["A", "B"], correctOptionIndex: 0, ...graded });
+    const port = new AnthropicLlmPort(fake.client);
     await port.generateQuestion({ type: "recall", concepts: [concept] });
+    await port.generateQuestion({ type: "flashcard", concepts: [concept] });
+    await port.generateQuestion({ type: "scenario", concepts: [concept, { name: "Retries", notes: null }] });
+    await port.gradeAnswer({ question: { type: "recall", prompt: "Q" }, concepts: [concept], submittedAnswer: "A" });
+    await port.gradeAnswer({ question: { type: "scenario", prompt: "Q" }, concepts: [concept], submittedAnswer: "A" });
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0].endpoint).toBe("standard");
-    expect(calls[0].params.model).toBe("claude-opus-5");
-    expect(calls[0].params).not.toHaveProperty("speed");
-    expect((calls[0].params.output_config as Record<string, unknown>).effort).toBeUndefined();
+    expect(fake.calls.map(({ endpoint }) => endpoint)).toEqual(Array(5).fill("standard"));
+    expect(
+      fake.calls.map(({ params }) => [params.model, (params.output_config as { effort?: string }).effort]),
+    ).toEqual([
+      ["claude-haiku-4-5", undefined],
+      ["claude-haiku-4-5", undefined],
+      ["claude-sonnet-5", "low"],
+      ["claude-haiku-4-5", undefined],
+      ["claude-haiku-4-5", undefined],
+    ]);
   });
 
   it("leaves room for thinking in max_tokens where the model thinks", async () => {
-    const { port, calls } = portWith({});
+    const { port, calls } = portWith({ writeRecall: { model: "claude-opus-5" } });
     await port.generateQuestion({ type: "recall", concepts: [concept] });
     expect(calls[0].params.max_tokens).toBeGreaterThanOrEqual(16000);
   });
