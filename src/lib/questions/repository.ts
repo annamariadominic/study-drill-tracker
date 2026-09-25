@@ -33,5 +33,6 @@ export interface QuestionsRepository {
 
   createAttempt(input: CreateAttemptInput): Promise<Attempt>;
   getAttempt(id: string): Promise<Attempt | null>;
-  listAttemptsForQuestions(questionIds: string[]): Promise<Attempt[]>;
+  /** Attempts on one Drill's Questions, oldest first. */
+  listDrillAttempts(drillId: string): Promise<Attempt[]>;
 }

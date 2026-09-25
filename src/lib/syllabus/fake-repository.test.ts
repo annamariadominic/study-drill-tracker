@@ -318,4 +318,43 @@ describe("FakeSyllabusRepository", () => {
       });
     });
   });
+
+  describe("studied Concepts", () => {
+    it("lists only studied Concepts, each with its Subject and Domain", async () => {
+      const domain = await repo.createDomain({ name: "Software Engineering" });
+      const subject = await repo.createSubject(domain.id, { name: "System Design" });
+      await repo.createConcept(subject.id, { name: "Sharding" });
+      const studied = await repo.setConceptStatus(
+        (await repo.createConcept(subject.id, { name: "Idempotency" })).id,
+        "studied",
+      );
+
+      expect(await repo.listStudiedConcepts()).toEqual([{ concept: studied, subject, domain }]);
+    });
+
+    it("keeps syllabus order: Domains as created, then Subjects and Concepts as arranged", async () => {
+      const first = await repo.createDomain({ name: "Software Engineering" });
+      const second = await repo.createDomain({ name: "Machine Learning" });
+      const studiedIn = async (subjectId: string, name: string) =>
+        repo.setConceptStatus((await repo.createConcept(subjectId, { name })).id, "studied");
+
+      const mlSubject = await repo.createSubject(second.id, { name: "ML System Design" });
+      const mlConcept = await studiedIn(mlSubject.id, "Model latency");
+
+      const apis = await repo.createSubject(first.id, { name: "API Design" });
+      const systems = await repo.createSubject(first.id, { name: "System Design" });
+      await repo.reorderSubjects(first.id, [systems.id, apis.id]);
+      const pagination = await studiedIn(apis.id, "Pagination");
+      const retries = await studiedIn(systems.id, "Retries");
+      const queues = await studiedIn(systems.id, "Queues");
+      await repo.reorderConcepts(systems.id, [queues.id, retries.id]);
+
+      expect((await repo.listStudiedConcepts()).map(({ concept }) => concept.name)).toEqual([
+        queues.name,
+        retries.name,
+        pagination.name,
+        mlConcept.name,
+      ]);
+    });
+  });
 });

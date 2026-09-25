@@ -8,7 +8,7 @@ import { PageHeader, SectionHeading } from "@/components/ui/page-header";
 import { PendingSubmit } from "@/components/ui/pending-submit";
 import { buttonVariants } from "@/components/ui/button";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
-import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
+import type { StudiedConcept } from "@/lib/syllabus/types";
 
 /** Studied Concepts grouped as "Domain › Subject" for the picker's <optgroup>s, in listed order. */
 function groupForPicker(studiedConcepts: StudiedConcept[]) {
@@ -27,7 +27,7 @@ export default async function StudyPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
-  const studiedConcepts = await listStudiedConcepts(getSyllabusRepository());
+  const studiedConcepts = await getSyllabusRepository().listStudiedConcepts();
 
   return (
     <>

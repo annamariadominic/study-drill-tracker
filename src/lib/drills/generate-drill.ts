@@ -3,7 +3,7 @@ import { questionFieldsFromGenerated } from "@/lib/questions/from-generated";
 import type { QuestionsRepository } from "@/lib/questions/repository";
 import { scheduleFromFields } from "@/lib/study/scheduling";
 import { NotFoundError } from "@/lib/syllabus/errors";
-import type { StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
+import type { StudiedConcept } from "@/lib/syllabus/types";
 import { composeDrill } from "./compose-drill";
 import { DrillGenerationError } from "./errors";
 import type { CreateDrillInput, DrillsRepository } from "./repository";

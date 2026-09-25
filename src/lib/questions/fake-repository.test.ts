@@ -123,33 +123,43 @@ describe("FakeQuestionsRepository", () => {
     ]);
   });
 
-  it("lists attempts for the given questions only", async () => {
-    const question = await repo.createQuestion({
+  it("lists a drill's attempts, oldest first, and leaves out other questions' attempts", async () => {
+    const first = await repo.createQuestion({
       conceptIds: ["concept-1"],
       type: "recall",
       prompt: "Explain idempotency.",
+      drillId: "drill-1",
+      position: 0,
     });
-    const other = await repo.createQuestion({
+    const second = await repo.createQuestion({
       conceptIds: ["concept-2"],
       type: "recall",
       prompt: "Explain retries.",
+      drillId: "drill-1",
+      position: 1,
     });
-    const attempt = await repo.createAttempt({
-      questionId: question.id,
-      submittedAnswer: "Retrying has no extra effect.",
-      confidence: "confident",
-      correctness: "correct",
-      gradedExplanation: "Correct.",
+    const otherDrill = await repo.createQuestion({
+      conceptIds: ["concept-3"],
+      type: "recall",
+      prompt: "Explain backoff.",
+      drillId: "drill-2",
+      position: 0,
     });
-    await repo.createAttempt({
-      questionId: other.id,
-      submittedAnswer: "Try again.",
-      confidence: "guessed",
-      correctness: "partial",
-      gradedExplanation: "Partly.",
-    });
+    const standalone = await repo.createQuestion({ conceptIds: ["concept-4"], type: "recall", prompt: "Explain queues." });
+    const answer = (questionId: string) =>
+      repo.createAttempt({
+        questionId,
+        submittedAnswer: "An answer.",
+        confidence: "partial",
+        correctness: "partial",
+        gradedExplanation: "Partly.",
+      });
+    const onSecond = await answer(second.id);
+    await answer(otherDrill.id);
+    await answer(standalone.id);
+    const onFirst = await answer(first.id);
 
-    expect(await repo.listAttemptsForQuestions([question.id])).toEqual([attempt]);
-    expect(await repo.listAttemptsForQuestions([])).toEqual([]);
+    expect(await repo.listDrillAttempts("drill-1")).toEqual([onSecond, onFirst]);
+    expect(await repo.listDrillAttempts("no-such-drill")).toEqual([]);
   });
 });

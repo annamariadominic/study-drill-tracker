@@ -21,7 +21,6 @@ import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listDueConcepts } from "@/lib/syllabus/list-due-concepts";
-import { listStudiedConcepts } from "@/lib/syllabus/list-studied-concepts";
 
 type Span = { start: number; end: number };
 let spans: Span[] = [];
@@ -114,7 +113,7 @@ async function main() {
     if (domains[0]) await syllabusRepo.getDomain(domains[0].id);
     await listDueConcepts(syllabusRepo);
   });
-  await measure("Study / Random Drill page: studied Concepts", () => listStudiedConcepts(syllabusRepo));
+  await measure("Study / Random Drill page: studied Concepts", () => syllabusRepo.listStudiedConcepts());
   await measure("Any app page: layout's Domain list", () => syllabusRepo.listDomains());
 
   if (!latest) {
@@ -135,9 +134,11 @@ async function main() {
     await measure("Submit answer: reads before grading", async () => {
       const q = await questionsRepo.getQuestion(question.id);
       if (!q?.drillId) return;
-      const drillQuestions = await questionsRepo.listDrillQuestions(q.drillId);
-      await questionsRepo.listAttemptsForQuestions(drillQuestions.map(({ id }) => id));
-      await Promise.all(q.conceptIds.map((id) => syllabusRepo.getConcept(id)));
+      await Promise.all([
+        questionsRepo.listDrillQuestions(q.drillId),
+        questionsRepo.listDrillAttempts(q.drillId),
+        ...q.conceptIds.map((id) => syllabusRepo.getConcept(id)),
+      ]);
     });
     await measure("Submit answer: schedule read after grading", () =>
       Promise.all(question.conceptIds.map((id) => syllabusRepo.getConcept(id))),

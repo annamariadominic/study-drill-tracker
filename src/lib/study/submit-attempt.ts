@@ -27,12 +27,11 @@ async function conceptsToAdvance(
     return question.conceptIds;
   }
 
-  const drillQuestions = await questionsRepo.listDrillQuestions(question.drillId);
-  const attemptedQuestionIds = new Set(
-    (await questionsRepo.listAttemptsForQuestions(drillQuestions.map(({ id }) => id))).map(
-      (attempt) => attempt.questionId,
-    ),
-  );
+  const [drillQuestions, drillAttempts] = await Promise.all([
+    questionsRepo.listDrillQuestions(question.drillId),
+    questionsRepo.listDrillAttempts(question.drillId),
+  ]);
+  const attemptedQuestionIds = new Set(drillAttempts.map((attempt) => attempt.questionId));
 
   return question.conceptIds.filter((conceptId) => {
     const aboutConcept = drillQuestions.filter((drillQuestion) =>
@@ -72,8 +71,12 @@ export async function submitAttempt(
   }
 
   // Checked before the Attempt is recorded, so it doesn't count itself as an
-  // earlier review of the Concept.
-  const advancingConceptIds = await conceptsToAdvance(deps.questionsRepo, question);
+  // earlier review of the Concept. The grader's Concepts are read alongside
+  // (a flashcard doesn't need them), rather than after.
+  const [advancingConceptIds, concepts] = await Promise.all([
+    conceptsToAdvance(deps.questionsRepo, question),
+    question.type === "flashcard" ? [] : gradingConcepts(deps.syllabusRepo, question),
+  ]);
 
   let correctness: Correctness;
   let gradedExplanation: string;
@@ -101,7 +104,7 @@ export async function submitAttempt(
     submittedAnswer = input.submittedAnswer ?? "";
     const graded = await deps.llmPort.gradeAnswer({
       question: { type: question.type, prompt: question.prompt },
-      concepts: await gradingConcepts(deps.syllabusRepo, question),
+      concepts,
       submittedAnswer,
     });
     correctness = graded.correctness;

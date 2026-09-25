@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { initialReviewSchedule, pullReviewCloser, scheduleFromFields } from "@/lib/study/scheduling";
 import { InvalidOrderError, NotFoundError } from "./errors";
 import type { SyllabusRepository } from "./repository";
-import type { Concept, ConceptStatus, Domain, Subject } from "./types";
+import type { Concept, ConceptStatus, Domain, StudiedConcept, Subject } from "./types";
 
 /** Mirrors the exact-sibling check the database's reorder functions make. */
 function assertSameSiblings(label: string, siblings: { id: string }[], requestedIds: string[]) {
@@ -166,6 +166,22 @@ export class FakeSyllabusRepository implements SyllabusRepository {
     conceptIds.forEach((id, position) => {
       this.concepts.set(id, { ...this.concepts.get(id)!, position });
     });
+  }
+
+  async listStudiedConcepts(): Promise<StudiedConcept[]> {
+    // A stable sort, so Domains created in the same millisecond stay in creation order.
+    const domains = [...this.domains.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const studied: StudiedConcept[] = [];
+    for (const domain of domains) {
+      for (const subject of await this.listSubjects(domain.id)) {
+        for (const concept of await this.listConcepts(subject.id)) {
+          if (concept.status === "studied") {
+            studied.push({ concept, subject, domain });
+          }
+        }
+      }
+    }
+    return studied;
   }
 
   async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {

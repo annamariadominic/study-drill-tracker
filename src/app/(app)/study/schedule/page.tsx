@@ -3,7 +3,6 @@ import { ReviewSchedule, type ReviewScheduleView } from "@/components/study/revi
 import { PageHeader } from "@/components/ui/page-header";
 import { PendingLink } from "@/components/ui/pending-link";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
-import { listStudiedConcepts } from "@/lib/syllabus/list-studied-concepts";
 import { listScheduledReviews } from "@/lib/syllabus/review-schedule";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +18,7 @@ export default async function ReviewSchedulePage({
 }) {
   const { view: viewParam } = await searchParams;
   const view: ReviewScheduleView = viewParam === "calendar" ? "calendar" : "list";
-  const studiedConcepts = await listStudiedConcepts(getSyllabusRepository());
+  const studiedConcepts = await getSyllabusRepository().listStudiedConcepts();
   const scheduledReviews = listScheduledReviews(studiedConcepts);
   const renderedAt = new Date().toISOString();
 
