@@ -7,10 +7,8 @@ import { NativeSelect } from "@/components/ui/input";
 import { PageHeader, SectionHeading } from "@/components/ui/page-header";
 import { PendingSubmit } from "@/components/ui/pending-submit";
 import { buttonVariants } from "@/components/ui/button";
-import { ReviewSchedule } from "@/components/study/review-schedule";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
-import { listScheduledReviews } from "@/lib/syllabus/review-schedule";
 
 /** Studied Concepts grouped as "Domain › Subject" for the picker's <optgroup>s, in listed order. */
 function groupForPicker(studiedConcepts: StudiedConcept[]) {
@@ -30,8 +28,6 @@ export default async function StudyPage({
 }) {
   const { error } = await searchParams;
   const studiedConcepts = await listStudiedConcepts(getSyllabusRepository());
-  const scheduledReviews = listScheduledReviews(studiedConcepts);
-  const renderedAt = new Date().toISOString();
 
   return (
     <>
@@ -103,20 +99,6 @@ export default async function StudyPage({
             </div>
           </form>
         )}
-      </section>
-
-      <section aria-labelledby="review-schedule-heading" className="mt-14">
-        <SectionHeading id="review-schedule-heading" count={scheduledReviews.length}>
-          Review schedule
-        </SectionHeading>
-        <p className="mb-6 max-w-prose text-sm text-muted">
-          When each studied Concept comes back for review, in your time zone.
-        </p>
-        <ReviewSchedule
-          reviews={scheduledReviews}
-          now={renderedAt}
-          hasStudiedConcepts={studiedConcepts.length > 0}
-        />
       </section>
     </>
   );
