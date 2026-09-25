@@ -164,5 +164,4 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
     if (error) throw error;
     return (data as AttemptRow[]).map(toAttempt);
   }
-
 }

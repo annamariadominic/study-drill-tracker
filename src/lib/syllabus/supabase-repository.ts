@@ -25,6 +25,8 @@ type ConceptInSyllabusRow = ConceptRow & { subject: SubjectRow & { domain: Domai
 
 const CONCEPT_IN_SYLLABUS = "*, subject:subjects!inner(*, domain:domains!inner(*))";
 
+const STUDIED_PAGE_SIZE = 1000;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Each ordered sibling list: its table, the parent it's scoped to, and its reorder function. */
@@ -278,14 +280,24 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
   }
 
   async listStudiedConcepts(): Promise<StudiedConcept[]> {
-    const { data, error } = await this.client
-      .from("concepts")
-      .select(CONCEPT_IN_SYLLABUS)
-      .eq("status", "studied");
-    if (error) throw error;
+    // PostgREST caps each response (max_rows, 1000 here and on hosted
+    // Supabase), so a library past that is read in pages rather than cut short.
+    // Ordered by id only so the pages don't overlap.
+    const rows: ConceptInSyllabusRow[] = [];
+    for (let from = 0; ; from += STUDIED_PAGE_SIZE) {
+      const { data, error } = await this.client
+        .from("concepts")
+        .select(CONCEPT_IN_SYLLABUS)
+        .eq("status", "studied")
+        .order("id", { ascending: true })
+        .range(from, from + STUDIED_PAGE_SIZE - 1);
+      if (error) throw error;
+      rows.push(...(data as ConceptInSyllabusRow[]));
+      if (data.length < STUDIED_PAGE_SIZE) break;
+    }
     // Sorted here rather than by the query: it's syllabus order across three
     // tables, which PostgREST can't order a flat list of Concepts by.
-    return (data as ConceptInSyllabusRow[])
+    return rows
       .map((row) => ({
         concept: toConcept(row),
         subject: toSubject(row.subject),
