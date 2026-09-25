@@ -2,8 +2,8 @@ import type { LlmPort } from "@/lib/llm/port";
 import type { QuestionsRepository } from "@/lib/questions/repository";
 import { ConceptNotStudiedError } from "@/lib/study/errors";
 import { NotFoundError } from "@/lib/syllabus/errors";
-import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
+import type { StudiedConcept } from "@/lib/syllabus/types";
 import { MixedDomainsError, NoStudiedConceptsError } from "./errors";
 import { DEFAULT_MAX_QUESTIONS, roomForEveryConcept } from "./compose-drill";
 import { generateDrill } from "./generate-drill";
@@ -22,7 +22,7 @@ async function conceptsInScope(
   scope: RandomDrillScope,
   random: () => number,
 ): Promise<{ domainId: string; concepts: StudiedConcept[] }> {
-  const studied = await listStudiedConcepts(syllabusRepo);
+  const studied = await syllabusRepo.listStudiedConcepts();
 
   let concepts: StudiedConcept[];
   switch (scope.kind) {

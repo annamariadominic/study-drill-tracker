@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeSyllabusRepository } from "./fake-repository";
-import { listStudiedConcepts } from "./list-studied-concepts";
 import type { SyllabusRepository } from "./repository";
 import { groupReviewSchedule, listScheduledReviews, type ScheduledReview } from "./review-schedule";
 
@@ -33,7 +32,7 @@ describe("listScheduledReviews", () => {
     }
     await repo.reorderConcepts(systemDesign.id, [caching.id, sharding.id, loadBalancing.id]);
 
-    const reviews = listScheduledReviews(await listStudiedConcepts(repo));
+    const reviews = listScheduledReviews(await repo.listStudiedConcepts());
 
     expect(reviews.map((r) => r.conceptName)).toEqual(["Caching", "Load balancing", "Idempotency"]);
     expect(reviews[2]).toMatchObject({
@@ -54,7 +53,7 @@ describe("listScheduledReviews", () => {
       "studied",
     );
 
-    const studiedConcepts = await listStudiedConcepts(repo);
+    const studiedConcepts = await repo.listStudiedConcepts();
     const unscheduled = { ...studiedConcepts[0], concept: { ...studied, id: "unscheduled", nextReviewDueAt: null } };
     const plannedEntry = { ...studiedConcepts[0], concept: planned };
 

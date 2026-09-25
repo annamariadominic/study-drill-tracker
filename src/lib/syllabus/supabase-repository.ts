@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { initialReviewSchedule, pullReviewCloser, scheduleFromFields } from "@/lib/study/scheduling";
 import { InvalidOrderError, NotFoundError } from "./errors";
 import type { SyllabusRepository } from "./repository";
-import type { Concept, ConceptStatus, Domain, Subject } from "./types";
+import type { Concept, ConceptStatus, Domain, StudiedConcept, Subject } from "./types";
 
 type DomainRow = { id: string; name: string; created_at: string };
 type SubjectRow = { id: string; domain_id: string; name: string; position: number; created_at: string };
@@ -19,6 +19,11 @@ type ConceptRow = {
   review_ease_factor: number | null;
   next_review_due_at: string | null;
 };
+
+/** A Concept row read back with its Subject, and that Subject's Domain, embedded. */
+type ConceptInSyllabusRow = ConceptRow & { subject: SubjectRow & { domain: DomainRow } };
+
+const CONCEPT_IN_SYLLABUS = "*, subject:subjects!inner(*, domain:domains!inner(*))";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -270,6 +275,29 @@ export class SupabaseSyllabusRepository implements SyllabusRepository {
 
   async reorderConcepts(subjectId: string, conceptIds: string[]): Promise<void> {
     await this.reorder("concepts", subjectId, conceptIds);
+  }
+
+  async listStudiedConcepts(): Promise<StudiedConcept[]> {
+    const { data, error } = await this.client
+      .from("concepts")
+      .select(CONCEPT_IN_SYLLABUS)
+      .eq("status", "studied");
+    if (error) throw error;
+    // Sorted here rather than by the query: it's syllabus order across three
+    // tables, which PostgREST can't order a flat list of Concepts by.
+    return (data as ConceptInSyllabusRow[])
+      .map((row) => ({
+        concept: toConcept(row),
+        subject: toSubject(row.subject),
+        domain: toDomain(row.subject.domain),
+      }))
+      .sort(
+        (a, b) =>
+          Date.parse(a.domain.createdAt) - Date.parse(b.domain.createdAt) ||
+          a.domain.id.localeCompare(b.domain.id) ||
+          a.subject.position - b.subject.position ||
+          a.concept.position - b.concept.position,
+      );
   }
 
   async setConceptStatus(id: string, status: ConceptStatus): Promise<Concept> {

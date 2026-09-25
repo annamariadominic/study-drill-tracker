@@ -29,3 +29,10 @@ export type Concept = {
   reviewEaseFactor: number | null;
   nextReviewDueAt: string | null;
 };
+
+/** A studied Concept together with where it sits in the syllabus. */
+export type StudiedConcept = {
+  concept: Concept;
+  subject: Subject;
+  domain: Domain;
+};

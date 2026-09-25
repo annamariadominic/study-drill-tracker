@@ -1,4 +1,4 @@
-import type { Concept, ConceptStatus, Domain, Subject } from "./types";
+import type { Concept, ConceptStatus, Domain, StudiedConcept, Subject } from "./types";
 
 export interface SyllabusRepository {
   listDomains(): Promise<Domain[]>;
@@ -32,6 +32,12 @@ export interface SyllabusRepository {
    * the order, never a Concept's status or review schedule.
    */
   reorderConcepts(subjectId: string, conceptIds: string[]): Promise<void>;
+  /**
+   * Every studied Concept with its Subject and Domain, in syllabus order:
+   * Domains as created, then Subjects and Concepts as arranged. Read in one go,
+   * however large the library is.
+   */
+  listStudiedConcepts(): Promise<StudiedConcept[]>;
   setConceptStatus(id: string, status: ConceptStatus): Promise<Concept>;
   updateConceptReviewSchedule(
     id: string,

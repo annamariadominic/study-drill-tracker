@@ -1,4 +1,4 @@
-import type { StudiedConcept } from "./list-studied-concepts";
+import type { StudiedConcept } from "./types";
 
 /** One Concept's next review, with the names needed to show it. Plain data, so it can cross to the client. */
 export type ScheduledReview = {

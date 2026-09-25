@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { PendingSubmit } from "@/components/ui/pending-submit";
 import { buttonVariants } from "@/components/ui/button";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
-import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
+import type { StudiedConcept } from "@/lib/syllabus/types";
 import { cn } from "@/lib/utils";
 
 const ERRORS: Record<string, string> = {
@@ -57,7 +57,7 @@ export default async function RandomDrillPage({
   const { error, scope: scopeParam } = await searchParams;
   // Errors come back with the scope they were submitted from, so they land on that form.
   const scope: Scope = SCOPES.some(({ value }) => value === scopeParam) ? (scopeParam as Scope) : "library";
-  const library = groupLibrary(await listStudiedConcepts(getSyllabusRepository()));
+  const library = groupLibrary(await getSyllabusRepository().listStudiedConcepts());
 
   return (
     <>
