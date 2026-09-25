@@ -56,7 +56,7 @@ export function listScheduledReviews(studiedConcepts: StudiedConcept[]): Schedul
  * from the formatter's parts rather than its formatted string, whose layout
  * varies by locale data and browser.
  */
-function calendarDate(instant: Date, timeZone: string): string {
+export function calendarDate(instant: Date, timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
