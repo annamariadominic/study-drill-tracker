@@ -25,7 +25,7 @@ A single item within a Drill. Comes in three kinds:
 - **Scenario**: a free-text prompt combining two or more Concepts, possibly from different Subjects within the same Domain. Any studied Concept is eligible for a Scenario question immediately — there is no minimum maturity requirement.
 
 **Attempt**:
-A recorded answer to one Question, carrying a Correctness and a Confidence.
+A recorded answer to one Question, carrying a Confidence and, once graded, a Correctness. A Flashcard Attempt is graded as it's recorded. A Recall or Scenario Attempt is recorded first with its **grading pending**, graded by the LLM in the background, and ends **graded** or, if grading fails, **failed** until a retry succeeds (see ADR 0011). It counts as answered while pending.
 
 **Correctness**:
 The graded outcome of an Attempt: **correct**, **partial**, or **incorrect**. Flashcard questions are graded mechanically; Recall and Scenario questions are graded by an LLM on this same 3-way scale.
@@ -34,4 +34,4 @@ The graded outcome of an Attempt: **correct**, **partial**, or **incorrect**. Fl
 A self-reported rating on an Attempt, one of **guessed**, **partial**, or **confident**. Submitted at the same time as the answer, before Correctness is revealed, so it isn't biased by already knowing the grade.
 
 **Review schedule**:
-Per-Concept spaced-repetition state that determines when a Concept next becomes due. Updated from Attempts on that Concept, in any Drill (due or random), using both Correctness and Confidence as input. A Drill advances a Concept's schedule at most once, even where it asks about that Concept more than once: the first recall Attempt is the signal where the Drill has one, otherwise the first Attempt on whatever it does ask (see ADR 0006).
+Per-Concept spaced-repetition state that determines when a Concept next becomes due. Updated from Attempts on that Concept, in any Drill (due or random), using both Correctness and Confidence as input, once the Attempt is graded. A Drill advances a Concept's schedule at most once, even where it asks about that Concept more than once: the first recall Attempt is the signal where the Drill has one, otherwise the first Attempt on whatever it does ask (see ADR 0006).
