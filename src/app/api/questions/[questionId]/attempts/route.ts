@@ -1,10 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getLlmPort } from "@/lib/llm/get-port";
 import { NotFoundError } from "@/lib/questions/errors";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import type { Confidence } from "@/lib/questions/types";
-import { submitAttempt } from "@/lib/study/submit-attempt";
+import { gradeAttempt, submitAttempt } from "@/lib/study/submit-attempt";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
+
+/**
+ * A free-text answer is graded after the response has gone (ADR 0011), which
+ * this bounds. Grading usually takes 4–8 s; the rest is room for a slow or
+ * retried LLM call to finish, and so mark the Attempt failed rather than
+ * leave it pending.
+ */
+export const maxDuration = 300;
 
 const VALID_CONFIDENCES: Confidence[] = ["guessed", "partial", "confident"];
 
@@ -37,20 +45,20 @@ export async function POST(
       ? Number.parseInt(optionIndexRaw, 10)
       : undefined;
 
+  const deps = { questionsRepo: getQuestionsRepository(), syllabusRepo: getSyllabusRepository() };
+
   try {
-    const attempt = await submitAttempt(
-      {
-        questionsRepo: getQuestionsRepository(),
-        syllabusRepo: getSyllabusRepository(),
-        llmPort: getLlmPort(),
-      },
-      {
-        questionId,
-        confidence: confidence as Confidence,
-        submittedAnswer: typeof submittedAnswer === "string" ? submittedAnswer : undefined,
-        selectedOptionIndex,
-      },
-    );
+    const attempt = await submitAttempt(deps, {
+      questionId,
+      confidence: confidence as Confidence,
+      submittedAnswer: typeof submittedAnswer === "string" ? submittedAnswer : undefined,
+      selectedOptionIndex,
+    });
+    if (attempt.gradingStatus === "pending") {
+      // The learner goes straight to their feedback, which fills in once this
+      // has graded the answer.
+      after(() => gradeAttempt({ ...deps, llmPort: getLlmPort() }, attempt.id));
+    }
     return NextResponse.redirect(new URL(returnUrl(`attemptId=${attempt.id}`), request.url), {
       status: 303,
     });
@@ -58,7 +66,7 @@ export async function POST(
     if (error instanceof NotFoundError) {
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
-    return NextResponse.redirect(new URL(returnUrl("error=grading-failed"), request.url), {
+    return NextResponse.redirect(new URL(returnUrl("error=submit-failed"), request.url), {
       status: 303,
     });
   }

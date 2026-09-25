@@ -1,16 +1,18 @@
-import type { Correctness } from "@/lib/questions/types";
+import type { StepOutcome } from "@/lib/drills/drill-progress";
 import { cn } from "@/lib/utils";
 
-const FILLED: Record<Correctness, string> = {
+const FILLED: Record<StepOutcome, string> = {
   correct: "bg-correct",
   partial: "bg-partial",
   incorrect: "bg-incorrect",
+  grading: "bg-faint animate-pulse motion-reduce:animate-none",
+  failed: "bg-faint",
 };
 
 /**
- * One segment per Question: answered ones take their outcome's colour, the
- * current one is the accent, the rest are empty. The count beside it says the
- * same thing in words.
+ * One segment per Question: answered ones take their outcome's colour (a
+ * neutral one, pulsing, while still being graded), the current one is the
+ * accent, the rest are empty. The count beside it says the same thing in words.
  */
 export function DrillProgressBar({
   outcomes,
@@ -18,7 +20,7 @@ export function DrillProgressBar({
   className,
 }: {
   /** Each Question's outcome in Drill order, or null while unanswered. */
-  outcomes: (Correctness | null)[];
+  outcomes: (StepOutcome | null)[];
   /** The Question being asked now, or null when none is (feedback or summary). */
   currentIndex: number | null;
   className?: string;
@@ -30,6 +32,7 @@ export function DrillProgressBar({
         {outcomes.map((outcome, index) => (
           <span
             key={index}
+            data-outcome={outcome ?? undefined}
             className={cn(
               "h-1 flex-1 rounded-full",
               outcome ? FILLED[outcome] : index === currentIndex ? "bg-accent" : "bg-line-strong",

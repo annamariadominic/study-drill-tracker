@@ -4,3 +4,11 @@ export class ConceptNotStudiedError extends Error {
     this.name = "ConceptNotStudiedError";
   }
 }
+
+/** Grading can only be retried once it has failed. */
+export class GradingNotFailedError extends Error {
+  constructor(attemptId: string) {
+    super(`Attempt's grading hasn't failed: ${attemptId}`);
+    this.name = "GradingNotFailedError";
+  }
+}

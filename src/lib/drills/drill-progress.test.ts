@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Attempt, Correctness, Question } from "@/lib/questions/types";
-import { drillProgress } from "./drill-progress";
+import { drillProgress, stepOutcome } from "./drill-progress";
 
 function question(id: string, position: number): Question {
   return {
@@ -16,12 +16,24 @@ function question(id: string, position: number): Question {
   };
 }
 
+function ungraded(id: string, questionId: string, gradingStatus: "pending" | "failed"): Attempt {
+  return {
+    ...attempt(id, questionId, "correct"),
+    gradingStatus,
+    correctness: null,
+    gradedExplanation: null,
+    referenceAnswer: null,
+  };
+}
+
 function attempt(id: string, questionId: string, correctness: Correctness): Attempt {
   return {
     id,
     questionId,
     submittedAnswer: "An answer.",
     confidence: "partial",
+    advancesConceptIds: [],
+    gradingStatus: "graded",
     correctness,
     gradedExplanation: "Because.",
     referenceAnswer: null,
@@ -63,7 +75,7 @@ describe("drillProgress", () => {
 
     expect(progress.completed).toBe(true);
     expect(progress.currentQuestion).toBeNull();
-    expect(progress.summary).toEqual({ correct: 1, partial: 1, incorrect: 1, total: 3 });
+    expect(progress.summary).toEqual({ correct: 1, partial: 1, incorrect: 1, grading: 0, failed: 0, total: 3 });
   });
 
   it("counts only the first Attempt on a Question", () => {
@@ -72,7 +84,7 @@ describe("drillProgress", () => {
       { ...attempt("a2", "q1", "correct"), createdAt: "2026-01-01T00:02:00.000Z" },
     ]);
 
-    expect(progress.summary).toEqual({ correct: 0, partial: 0, incorrect: 1, total: 1 });
+    expect(progress.summary).toEqual({ correct: 0, partial: 0, incorrect: 1, grading: 0, failed: 0, total: 1 });
     expect(progress.steps[0].attempt?.id).toBe("a1");
   });
 
@@ -80,6 +92,34 @@ describe("drillProgress", () => {
     const progress = drillProgress([], []);
 
     expect(progress.completed).toBe(true);
-    expect(progress.summary).toEqual({ correct: 0, partial: 0, incorrect: 0, total: 0 });
+    expect(progress.summary).toEqual({ correct: 0, partial: 0, incorrect: 0, grading: 0, failed: 0, total: 0 });
+  });
+
+  it("counts an Attempt still being graded as answered, and moves on to the next Question", () => {
+    const progress = drillProgress(questions, [attempt("a1", "q1", "correct"), ungraded("a2", "q2", "pending")]);
+
+    expect(progress.currentQuestion?.id).toBe("q3");
+    expect(progress.answeredCount).toBe(2);
+    expect(progress.gradingAttemptIds).toEqual(["a2"]);
+  });
+
+  it("summarises only graded Attempts, counting the rest as grading or failed", () => {
+    const progress = drillProgress(questions, [
+      attempt("a1", "q1", "correct"),
+      ungraded("a2", "q2", "pending"),
+      ungraded("a3", "q3", "failed"),
+    ]);
+
+    expect(progress.completed).toBe(true);
+    expect(progress.summary).toEqual({ correct: 1, partial: 0, incorrect: 0, grading: 1, failed: 1, total: 3 });
+    expect(progress.gradingAttemptIds).toEqual(["a2"]);
+  });
+
+  it("gives each step its outcome: the grade, grading, failed, or nothing while unanswered", () => {
+    const progress = drillProgress(questions, [ungraded("a1", "q1", "pending"), ungraded("a2", "q2", "failed")]);
+    const graded = drillProgress(questions, [attempt("a1", "q1", "partial")]);
+
+    expect(progress.steps.map(stepOutcome)).toEqual(["grading", "failed", null]);
+    expect(stepOutcome(graded.steps[0])).toBe("partial");
   });
 });

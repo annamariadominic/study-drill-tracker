@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertQuestionConcepts } from "./concepts";
 import type { CreateAttemptInput, CreateQuestionInput, QuestionsRepository } from "./repository";
-import type { Attempt, Confidence, Correctness, Question, QuestionType } from "./types";
+import type {
+  Attempt,
+  AttemptGrade,
+  Confidence,
+  Correctness,
+  GradedAttempt,
+  GradingStatus,
+  Question,
+  QuestionType,
+} from "./types";
 
 type QuestionRow = {
   id: string;
@@ -26,8 +35,10 @@ type AttemptRow = {
   question_id: string;
   submitted_answer: string;
   confidence: Confidence;
-  correctness: Correctness;
-  graded_explanation: string;
+  grading_status: GradingStatus;
+  advances_concept_ids: string[];
+  correctness: Correctness | null;
+  graded_explanation: string | null;
   reference_answer: string | null;
   created_at: string;
 };
@@ -59,15 +70,32 @@ function toQuestionWithConcepts(row: QuestionWithConceptsRow): Question {
 }
 
 function toAttempt(row: AttemptRow): Attempt {
-  return {
+  const base = {
     id: row.id,
     questionId: row.question_id,
     submittedAnswer: row.submitted_answer,
     confidence: row.confidence,
-    correctness: row.correctness,
-    gradedExplanation: row.graded_explanation,
-    referenceAnswer: row.reference_answer,
+    advancesConceptIds: row.advances_concept_ids,
     createdAt: row.created_at,
+  };
+  if (row.grading_status !== "graded") {
+    return { ...base, gradingStatus: row.grading_status, correctness: null, gradedExplanation: null, referenceAnswer: null };
+  }
+  // The table's check constraint guarantees a graded row has its grade.
+  return {
+    ...base,
+    gradingStatus: "graded",
+    correctness: row.correctness!,
+    gradedExplanation: row.graded_explanation!,
+    referenceAnswer: row.reference_answer,
+  };
+}
+
+function toGradeColumns(grade: AttemptGrade) {
+  return {
+    correctness: grade.correctness,
+    graded_explanation: grade.gradedExplanation,
+    reference_answer: grade.referenceAnswer,
   };
 }
 
@@ -134,9 +162,10 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
         question_id: input.questionId,
         submitted_answer: input.submittedAnswer,
         confidence: input.confidence,
-        correctness: input.correctness,
-        graded_explanation: input.gradedExplanation,
-        reference_answer: input.referenceAnswer ?? null,
+        advances_concept_ids: input.advancesConceptIds,
+        ...(input.grade
+          ? { grading_status: "graded", ...toGradeColumns(input.grade) }
+          : { grading_status: "pending" }),
       })
       .select()
       .single();
@@ -149,6 +178,39 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
       .from("attempts")
       .select("*")
       .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? toAttempt(data as AttemptRow) : null;
+  }
+
+  async recordGrade(id: string, grade: AttemptGrade): Promise<GradedAttempt | null> {
+    const attempt = await this.updateGradingStatus(id, "pending", { grading_status: "graded", ...toGradeColumns(grade) });
+    return attempt as GradedAttempt | null;
+  }
+
+  async markGradingFailed(id: string): Promise<Attempt | null> {
+    return this.updateGradingStatus(id, "pending", { grading_status: "failed" });
+  }
+
+  async reopenFailedGrading(id: string): Promise<Attempt | null> {
+    return this.updateGradingStatus(id, "failed", { grading_status: "pending" });
+  }
+
+  /**
+   * Updates the Attempt only while its grading status is still `from`, in one
+   * statement, so concurrent gradings can't both move it.
+   */
+  private async updateGradingStatus(
+    id: string,
+    from: GradingStatus,
+    changes: Record<string, unknown>,
+  ): Promise<Attempt | null> {
+    const { data, error } = await this.client
+      .from("attempts")
+      .update(changes)
+      .eq("id", id)
+      .eq("grading_status", from)
+      .select()
       .maybeSingle();
     if (error) throw error;
     return data ? toAttempt(data as AttemptRow) : null;

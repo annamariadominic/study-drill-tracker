@@ -4,8 +4,23 @@ import { NotFoundError as QuestionsNotFoundError } from "@/lib/questions/errors"
 import { FakeLlmPort } from "@/lib/llm/fake-port";
 import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
 import { holdCalls } from "@/lib/testing/held-calls";
+import type { QuestionsRepository } from "@/lib/questions/repository";
+import type { LlmPort } from "@/lib/llm/port";
+import type { SyllabusRepository } from "@/lib/syllabus/repository";
+import { GradingNotFailedError } from "./errors";
 import { scheduleFromFields, scheduleNextReview } from "./scheduling";
-import { submitAttempt } from "./submit-attempt";
+import { gradeAttempt, retryGrading, submitAttempt } from "./submit-attempt";
+
+type Deps = { questionsRepo: QuestionsRepository; syllabusRepo: SyllabusRepository; llmPort: LlmPort };
+
+/**
+ * Submits an answer and, where it's left pending, grades it straight away, as
+ * the attempts route does once it has responded.
+ */
+async function answer(deps: Deps, input: Parameters<typeof submitAttempt>[1]) {
+  const attempt = await submitAttempt(deps, input);
+  return attempt.gradingStatus === "pending" ? gradeAttempt(deps, attempt.id) : attempt;
+}
 
 async function buildStudiedConcept(syllabusRepo: FakeSyllabusRepository) {
   const domain = await syllabusRepo.createDomain({ name: "Software Engineering" });
@@ -28,7 +43,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "confident", selectedOptionIndex: 0 },
     );
@@ -51,7 +66,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "guessed", selectedOptionIndex: 1 },
     );
@@ -75,7 +90,7 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency.",
     });
 
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
     );
@@ -100,7 +115,7 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency.",
     });
 
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
     );
@@ -126,7 +141,7 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency.",
     });
 
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "confident", submittedAnswer: "Storing results for later." },
     );
@@ -149,7 +164,7 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency.",
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
     );
@@ -178,7 +193,7 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency.",
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "partial", submittedAnswer: "Retrying is safe." },
     );
@@ -205,7 +220,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "guessed", selectedOptionIndex: 1 },
     );
@@ -217,7 +232,6 @@ describe("submitAttempt", () => {
   it("rejects a flashcard selectedOptionIndex that is out of range", async () => {
     const questionsRepo = new FakeQuestionsRepository();
     const syllabusRepo = new FakeSyllabusRepository();
-    const llmPort = new FakeLlmPort();
     const concept = await buildStudiedConcept(syllabusRepo);
     const question = await questionsRepo.createQuestion({
       conceptIds: [concept.id],
@@ -229,7 +243,7 @@ describe("submitAttempt", () => {
 
     await expect(
       submitAttempt(
-        { questionsRepo, syllabusRepo, llmPort },
+        { questionsRepo, syllabusRepo },
         { questionId: question.id, confidence: "guessed", selectedOptionIndex: 99 },
       ),
     ).rejects.toThrow(/valid option index/);
@@ -238,35 +252,13 @@ describe("submitAttempt", () => {
   it("throws NotFoundError for a missing question", async () => {
     const questionsRepo = new FakeQuestionsRepository();
     const syllabusRepo = new FakeSyllabusRepository();
-    const llmPort = new FakeLlmPort();
 
     await expect(
       submitAttempt(
-        { questionsRepo, syllabusRepo, llmPort },
+        { questionsRepo, syllabusRepo },
         { questionId: "missing", confidence: "guessed", submittedAnswer: "x" },
       ),
     ).rejects.toThrow(QuestionsNotFoundError);
-  });
-
-  it("propagates an LLM grading failure instead of persisting a broken attempt", async () => {
-    const questionsRepo = new FakeQuestionsRepository();
-    const syllabusRepo = new FakeSyllabusRepository();
-    const llmPort = new FakeLlmPort(undefined, async () => {
-      throw new Error("LLM is down");
-    });
-    const concept = await buildStudiedConcept(syllabusRepo);
-    const question = await questionsRepo.createQuestion({
-      conceptIds: [concept.id],
-      type: "recall",
-      prompt: "Explain idempotency.",
-    });
-
-    await expect(
-      submitAttempt(
-        { questionsRepo, syllabusRepo, llmPort },
-        { questionId: question.id, confidence: "guessed", submittedAnswer: "x" },
-      ),
-    ).rejects.toThrow("LLM is down");
   });
 
   it("updates the Concept's review schedule after a correct attempt", async () => {
@@ -282,7 +274,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "confident", selectedOptionIndex: 0 },
     );
@@ -305,7 +297,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "guessed", selectedOptionIndex: 1 },
     );
@@ -328,7 +320,7 @@ describe("submitAttempt", () => {
     });
     await syllabusRepo.setConceptStatus(concept.id, "planned");
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: question.id, confidence: "confident", selectedOptionIndex: 0 },
     );
@@ -362,13 +354,13 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: recall.id, confidence: "confident", submittedAnswer: "No extra effect." },
     );
     const afterFirst = await syllabusRepo.getConcept(concept.id);
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
     );
@@ -400,11 +392,11 @@ describe("submitAttempt", () => {
       prompt: "Explain it again.",
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: first.id, confidence: "confident", submittedAnswer: "No extra effect." },
     );
-    const attempt = await submitAttempt(
+    const attempt = await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: second.id, confidence: "guessed", submittedAnswer: "Something else." },
     );
@@ -430,13 +422,13 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency again.",
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: first.id, confidence: "confident", submittedAnswer: "No extra effect." },
     );
     const afterFirst = await syllabusRepo.getConcept(concept.id);
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: second.id, confidence: "confident", submittedAnswer: "No extra effect." },
     );
@@ -468,14 +460,14 @@ describe("submitAttempt", () => {
       prompt: "Explain idempotency.",
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
     );
     const afterFlashcard = await syllabusRepo.getConcept(concept.id);
     expect(afterFlashcard?.reviewIntervalDays).toBe(1);
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: recall.id, confidence: "confident", submittedAnswer: "No extra effect." },
     );
@@ -499,7 +491,7 @@ describe("submitAttempt", () => {
       correctOptionIndex: 0,
     });
 
-    await submitAttempt(
+    await answer(
       { questionsRepo, syllabusRepo, llmPort },
       { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
     );
@@ -541,7 +533,7 @@ describe("submitAttempt", () => {
         prompt: "Design an inference API under load.",
       });
 
-      const attempt = await submitAttempt(
+      const attempt = await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: scenario.id, confidence: "partial", submittedAnswer: "Put a queue in front." },
       );
@@ -574,7 +566,7 @@ describe("submitAttempt", () => {
         prompt: "Design an inference API under load.",
       });
 
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
       );
@@ -603,7 +595,7 @@ describe("submitAttempt", () => {
         prompt: "Design an inference API under load.",
       });
 
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
       );
@@ -611,7 +603,7 @@ describe("submitAttempt", () => {
       expect(await intervalOf(syllabusRepo, queues.id)).toBe(1);
       expect(await intervalOf(syllabusRepo, latency.id)).toBeGreaterThan(1);
 
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: recall.id, confidence: "confident", submittedAnswer: "Buffers work." },
       );
@@ -641,13 +633,13 @@ describe("submitAttempt", () => {
         prompt: "Design an inference API under load.",
       });
 
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: flashcard.id, confidence: "confident", selectedOptionIndex: 0 },
       );
       const queuesAfterFlashcard = await syllabusRepo.getConcept(queues.id);
 
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
       );
@@ -671,12 +663,12 @@ describe("submitAttempt", () => {
         prompt: "Design an inference API under load.",
       });
 
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
       );
       const afterFirst = await syllabusRepo.getConcept(latency.id);
-      await submitAttempt(
+      await answer(
         { questionsRepo, syllabusRepo, llmPort },
         { questionId: scenario.id, confidence: "confident", submittedAnswer: "Queue and batch." },
       );
@@ -687,7 +679,7 @@ describe("submitAttempt", () => {
     });
   });
 
-  it("reads what the Attempt advances and what the grader needs together, not one after another", async () => {
+  it("reads the Drill's Questions and Attempts together, not one after another", async () => {
     const questionsRepo = new FakeQuestionsRepository();
     const syllabusRepo = new FakeSyllabusRepository();
     const concept = await buildStudiedConcept(syllabusRepo);
@@ -701,19 +693,217 @@ describe("submitAttempt", () => {
 
     const held = holdCalls();
     const submitting = submitAttempt(
-      {
-        questionsRepo: held.wrap(questionsRepo, ["listDrillQuestions", "listDrillAttempts"]),
-        syllabusRepo: held.wrap(syllabusRepo, ["getConcept"]),
-        llmPort: new FakeLlmPort(),
-      },
+      { questionsRepo: held.wrap(questionsRepo, ["listDrillQuestions", "listDrillAttempts"]), syllabusRepo },
       { questionId: question.id, confidence: "confident", submittedAnswer: "Same effect however often it runs." },
     );
     await held.settle();
 
-    expect([...held.started].sort()).toEqual(["getConcept", "listDrillAttempts", "listDrillQuestions"]);
+    expect([...held.started].sort()).toEqual(["listDrillAttempts", "listDrillQuestions"]);
 
     held.release();
-    await submitting;
-    expect((await syllabusRepo.getConcept(concept.id))?.nextReviewDueAt).not.toBe(concept.nextReviewDueAt);
+    expect((await submitting).advancesConceptIds).toEqual([concept.id]);
+  });
+
+  describe("background grading", () => {
+    async function recallSetup(grade?: ConstructorParameters<typeof FakeLlmPort>[1]) {
+      const questionsRepo = new FakeQuestionsRepository();
+      const syllabusRepo = new FakeSyllabusRepository();
+      const llmPort = new FakeLlmPort(undefined, grade);
+      const concept = await buildStudiedConcept(syllabusRepo);
+      const recall = await questionsRepo.createQuestion({
+        conceptIds: [concept.id],
+        drillId: "drill-1",
+        position: 0,
+        type: "recall",
+        prompt: "Explain idempotency.",
+      });
+      return { deps: { questionsRepo, syllabusRepo, llmPort }, questionsRepo, syllabusRepo, llmPort, concept, recall };
+    }
+
+    it("records a free-text answer as grading pending, without waiting on the grader", async () => {
+      const { deps, questionsRepo, llmPort, recall } = await recallSetup();
+
+      const attempt = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "partial",
+        submittedAnswer: "Retrying is safe.",
+      });
+
+      expect(attempt).toMatchObject({
+        gradingStatus: "pending",
+        submittedAnswer: "Retrying is safe.",
+        confidence: "partial",
+        correctness: null,
+        gradedExplanation: null,
+        referenceAnswer: null,
+      });
+      expect(llmPort.gradeAnswerCallCount).toBe(0);
+      expect(await questionsRepo.getAttempt(attempt.id)).toEqual(attempt);
+    });
+
+    it("records a flashcard answer already graded", async () => {
+      const { deps, syllabusRepo, concept } = await recallSetup();
+      const flashcard = await deps.questionsRepo.createQuestion({
+        conceptIds: [concept.id],
+        type: "flashcard",
+        prompt: "Pick the best definition.",
+        options: ["Correct one", "Wrong one"],
+        correctOptionIndex: 0,
+      });
+
+      const attempt = await submitAttempt(deps, {
+        questionId: flashcard.id,
+        confidence: "confident",
+        selectedOptionIndex: 0,
+      });
+
+      expect(attempt.gradingStatus).toBe("graded");
+      expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
+    });
+
+    it("leaves the review schedule alone while pending, and advances it once graded", async () => {
+      const { deps, syllabusRepo, concept, recall } = await recallSetup(async () => ({
+        correctness: "correct",
+        explanation: "Right.",
+        referenceAnswer: "Same effect however often it runs.",
+      }));
+
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+      expect(await syllabusRepo.getConcept(concept.id)).toEqual(concept);
+
+      const graded = await gradeAttempt(deps, pending.id);
+
+      expect(graded).toMatchObject({
+        id: pending.id,
+        gradingStatus: "graded",
+        correctness: "correct",
+        gradedExplanation: "Right.",
+        referenceAnswer: "Same effect however often it runs.",
+      });
+      const expected = scheduleNextReview(scheduleFromFields(concept)!, {
+        correctness: "correct",
+        confidence: "confident",
+      });
+      const updated = await syllabusRepo.getConcept(concept.id);
+      expect(updated?.reviewIntervalDays).toBe(expected.intervalDays);
+      expect(updated?.reviewEaseFactor).toBe(expected.easeFactor);
+    });
+
+    it("counts a pending Attempt as the Drill's signal, so a later Attempt can't claim the update", async () => {
+      const { deps, syllabusRepo, concept, recall } = await recallSetup();
+      const flashcard = await deps.questionsRepo.createQuestion({
+        conceptIds: [concept.id],
+        drillId: "drill-1",
+        position: 1,
+        type: "flashcard",
+        prompt: "Pick the best definition.",
+        options: ["Correct one", "Wrong one"],
+        correctOptionIndex: 0,
+      });
+
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+      const flashcardAttempt = await submitAttempt(deps, {
+        questionId: flashcard.id,
+        confidence: "confident",
+        selectedOptionIndex: 0,
+      });
+
+      expect(pending.advancesConceptIds).toEqual([concept.id]);
+      expect(flashcardAttempt.advancesConceptIds).toEqual([]);
+      expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBe(1);
+
+      await gradeAttempt(deps, pending.id);
+      expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
+    });
+
+    it("marks the Attempt failed when the grader fails, and advances nothing", async () => {
+      const { deps, questionsRepo, syllabusRepo, concept, recall } = await recallSetup(async () => {
+        throw new Error("LLM is down");
+      });
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+
+      const failed = await gradeAttempt(deps, pending.id);
+
+      expect(failed).toMatchObject({ id: pending.id, gradingStatus: "failed", correctness: null });
+      expect(await questionsRepo.getAttempt(pending.id)).toEqual(failed);
+      expect(await syllabusRepo.getConcept(concept.id)).toEqual(concept);
+    });
+
+    it("grades a failed Attempt again on retry, and only then advances the schedule", async () => {
+      let graderUp = false;
+      const { deps, syllabusRepo, concept, recall } = await recallSetup(async () => {
+        if (!graderUp) {
+          throw new Error("LLM is down");
+        }
+        return { correctness: "correct", explanation: "Right.", referenceAnswer: "Same effect." };
+      });
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+      await gradeAttempt(deps, pending.id);
+
+      graderUp = true;
+      const reopened = await retryGrading(deps, pending.id);
+      expect(reopened.gradingStatus).toBe("pending");
+      expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBe(1);
+
+      const graded = await gradeAttempt(deps, pending.id);
+      expect(graded).toMatchObject({ gradingStatus: "graded", correctness: "correct" });
+      expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
+    });
+
+    it("refuses to retry an Attempt whose grading hasn't failed", async () => {
+      const { deps, recall } = await recallSetup();
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+
+      await expect(retryGrading(deps, pending.id)).rejects.toThrow(GradingNotFailedError);
+      await gradeAttempt(deps, pending.id);
+      await expect(retryGrading(deps, pending.id)).rejects.toThrow(GradingNotFailedError);
+      await expect(retryGrading(deps, "missing")).rejects.toThrow(QuestionsNotFoundError);
+    });
+
+    it("advances the schedule once, even if the same pending Attempt is graded twice", async () => {
+      const { deps, syllabusRepo, llmPort, concept, recall } = await recallSetup();
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+
+      const [first, second] = await Promise.all([gradeAttempt(deps, pending.id), gradeAttempt(deps, pending.id)]);
+      const afterBoth = await syllabusRepo.getConcept(concept.id);
+      await gradeAttempt(deps, pending.id);
+
+      expect(first.gradingStatus).toBe("graded");
+      expect(second.gradingStatus).toBe("graded");
+      expect(llmPort.gradeAnswerCallCount).toBeLessThanOrEqual(2);
+      const once = scheduleNextReview(scheduleFromFields(concept)!, { correctness: "correct", confidence: "confident" });
+      expect(afterBoth?.reviewIntervalDays).toBe(once.intervalDays);
+      expect(afterBoth?.reviewEaseFactor).toBe(once.easeFactor);
+      expect(await syllabusRepo.getConcept(concept.id)).toEqual(afterBoth);
+    });
+
+    it("throws NotFoundError when grading a missing Attempt", async () => {
+      const { deps } = await recallSetup();
+      await expect(gradeAttempt(deps, "missing")).rejects.toThrow(QuestionsNotFoundError);
+    });
   });
 });

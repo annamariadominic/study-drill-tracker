@@ -111,6 +111,8 @@ async function pastAttempts(type: FreeTextQuestionType, count: number) {
     .from("attempts")
     .select("submitted_answer, correctness, graded_explanation, reference_answer, question_id, questions!inner(type)")
     .eq("questions.type", type)
+    // Only Attempts with a grade to compare against (ADR 0011).
+    .eq("grading_status", "graded")
     .order("created_at", { ascending: false })
     .limit(count);
   if (error) throw error;

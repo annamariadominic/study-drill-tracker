@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { DrillProgressBar } from "@/components/ui/drill-progress";
 import { CorrectnessMark } from "@/components/ui/status";
-import type { DrillProgress } from "@/lib/drills/drill-progress";
+import { stepOutcome, type DrillProgress, type StepOutcome } from "@/lib/drills/drill-progress";
 import type { Drill } from "@/lib/drills/types";
 import type { Correctness, Question } from "@/lib/questions/types";
-import { QUESTION_TYPE_LABEL } from "./question";
+import { GradingWatcher } from "./grading-watcher";
+import { Grading, QUESTION_TYPE_LABEL } from "./question";
 
 /** The names of the Concepts a Question asks about, in the order it presents them. */
 export function conceptList(question: Question, conceptNames: Map<string, string>) {
@@ -32,7 +33,7 @@ export function DrillFrame({
   children,
 }: {
   drill: Drill;
-  outcomes: (Correctness | null)[];
+  outcomes: (StepOutcome | null)[];
   currentIndex: number | null;
   children: ReactNode;
 }) {
@@ -113,6 +114,11 @@ export function DrillResults({
             ))}
           </div>
         ) : null}
+        {summary.grading > 0 ? (
+          <p className="text-sm text-muted">
+            {summary.grading} still grading — the count updates as grades arrive.
+          </p>
+        ) : null}
         <ul className="flex flex-wrap gap-x-6 gap-y-2">
           {(["correct", "partial", "incorrect"] as const).map((outcome) => (
             <li key={outcome} className="flex items-center gap-2">
@@ -131,15 +137,17 @@ export function DrillResults({
               <p className="text-sm text-text">{conceptList(step.question, conceptNames).join(" + ")}</p>
               <p className="text-xs text-muted">{QUESTION_TYPE_LABEL[step.question.type]}</p>
               <p className="mt-2 sm:hidden">
-                <StepOutcome correctness={step.attempt?.correctness} />
+                <StepResult outcome={stepOutcome(step)} feedbackHref={feedbackHref(drill, step.attempt?.id)} />
               </p>
             </div>
             <span className="hidden shrink-0 pt-0.5 sm:block">
-              <StepOutcome correctness={step.attempt?.correctness} />
+              <StepResult outcome={stepOutcome(step)} feedbackHref={feedbackHref(drill, step.attempt?.id)} />
             </span>
           </li>
         ))}
       </ol>
+
+      <GradingWatcher attemptIds={progress.gradingAttemptIds} />
 
       <div className="flex flex-col gap-3 sm:flex-row">
         {drill.scope === "random" ? (
@@ -159,10 +167,24 @@ export function DrillResults({
   );
 }
 
-function StepOutcome({ correctness }: { correctness: Correctness | undefined }) {
-  return correctness ? (
-    <CorrectnessMark correctness={correctness} />
-  ) : (
-    <span className="text-xs text-faint">Unanswered</span>
-  )
+/** The feedback screen of one of the Drill's Attempts, where a failed grade can be retried. */
+function feedbackHref(drill: Drill, attemptId: string | undefined) {
+  return attemptId ? `/study/drills/${drill.id}?attemptId=${attemptId}` : undefined;
+}
+
+function StepResult({ outcome, feedbackHref }: { outcome: StepOutcome | null; feedbackHref?: string }) {
+  switch (outcome) {
+    case null:
+      return <span className="text-xs text-faint">Unanswered</span>;
+    case "grading":
+      return <Grading className="text-xs" />;
+    case "failed":
+      return (
+        <Link href={feedbackHref ?? "#"} className="text-xs text-muted underline underline-offset-2 hover:text-text">
+          Couldn&apos;t grade — retry
+        </Link>
+      );
+    default:
+      return <CorrectnessMark correctness={outcome} />;
+  }
 }

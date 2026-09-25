@@ -82,11 +82,61 @@ describe("FakeQuestionsRepository", () => {
       questionId: question.id,
       submittedAnswer: "Retrying has no extra effect.",
       confidence: "confident",
-      correctness: "correct",
-      gradedExplanation: "Correct.",
+      advancesConceptIds: ["concept-1"],
+      grade: { correctness: "correct", gradedExplanation: "Correct.", referenceAnswer: null },
     });
 
+    expect(attempt).toMatchObject({ gradingStatus: "graded", correctness: "correct", advancesConceptIds: ["concept-1"] });
     expect(await repo.getAttempt(attempt.id)).toEqual(attempt);
+  });
+
+  describe("grading an attempt", () => {
+    const grade = { correctness: "partial", gradedExplanation: "Partly.", referenceAnswer: "The whole of it." } as const;
+
+    async function pendingAttempt() {
+      const question = await repo.createQuestion({ conceptIds: ["concept-1"], type: "recall", prompt: "Explain it." });
+      return repo.createAttempt({
+        questionId: question.id,
+        submittedAnswer: "Part of it.",
+        confidence: "partial",
+        advancesConceptIds: ["concept-1"],
+      });
+    }
+
+    it("records an attempt without a grade as pending", async () => {
+      const attempt = await pendingAttempt();
+
+      expect(attempt).toMatchObject({
+        gradingStatus: "pending",
+        correctness: null,
+        gradedExplanation: null,
+        referenceAnswer: null,
+      });
+    });
+
+    it("records the grade of a pending attempt, once", async () => {
+      const attempt = await pendingAttempt();
+
+      const graded = await repo.recordGrade(attempt.id, grade);
+
+      expect(graded).toEqual({ ...attempt, gradingStatus: "graded", ...grade });
+      expect(await repo.getAttempt(attempt.id)).toEqual(graded);
+      expect(await repo.recordGrade(attempt.id, { ...grade, correctness: "correct" })).toBeNull();
+      expect((await repo.getAttempt(attempt.id))?.correctness).toBe("partial");
+    });
+
+    it("marks a pending attempt failed, and reopens a failed one", async () => {
+      const attempt = await pendingAttempt();
+
+      expect(await repo.reopenFailedGrading(attempt.id)).toBeNull();
+      expect((await repo.markGradingFailed(attempt.id))?.gradingStatus).toBe("failed");
+      expect(await repo.recordGrade(attempt.id, grade)).toBeNull();
+      expect(await repo.markGradingFailed(attempt.id)).toBeNull();
+      expect((await repo.reopenFailedGrading(attempt.id))?.gradingStatus).toBe("pending");
+      expect((await repo.recordGrade(attempt.id, grade))?.gradingStatus).toBe("graded");
+      expect(await repo.markGradingFailed(attempt.id)).toBeNull();
+      expect(await repo.reopenFailedGrading("missing")).toBeNull();
+    });
   });
 
   it("returns null for a missing attempt", async () => {
@@ -151,8 +201,7 @@ describe("FakeQuestionsRepository", () => {
         questionId,
         submittedAnswer: "An answer.",
         confidence: "partial",
-        correctness: "partial",
-        gradedExplanation: "Partly.",
+        advancesConceptIds: [],
       });
     const onSecond = await answer(second.id);
     await answer(otherDrill.id);

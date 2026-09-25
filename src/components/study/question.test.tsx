@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import type { Attempt, Question, QuestionType } from "@/lib/questions/types";
+import { describe, expect, it, vi } from "vitest";
+import type { Attempt, GradedAttempt, Question, QuestionType, UngradedAttempt } from "@/lib/questions/types";
 import { AttemptFeedback, QuestionPrompt } from "./question";
+
+// The grading watcher refreshes through the App Router, which isn't mounted here.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
 function question(type: QuestionType, overrides: Partial<Question> = {}): Question {
   return {
@@ -18,17 +21,29 @@ function question(type: QuestionType, overrides: Partial<Question> = {}): Questi
   };
 }
 
-function attempt(overrides: Partial<Attempt> = {}): Attempt {
+function attempt(overrides: Partial<GradedAttempt> = {}): GradedAttempt {
   return {
     id: "a1",
     questionId: "q1",
     submittedAnswer: "Retrying is safe.",
     confidence: "partial",
+    advancesConceptIds: ["c1"],
+    gradingStatus: "graded",
     correctness: "partial",
     gradedExplanation: "You missed why retrying is safe.",
     referenceAnswer: "An idempotent operation has the same effect however many times it runs.",
     createdAt: "2026-01-01T00:01:00.000Z",
     ...overrides,
+  };
+}
+
+function ungraded(gradingStatus: UngradedAttempt["gradingStatus"]): UngradedAttempt {
+  return {
+    ...attempt(),
+    gradingStatus,
+    correctness: null,
+    gradedExplanation: null,
+    referenceAnswer: null,
   };
 }
 
@@ -104,6 +119,42 @@ describe("AttemptFeedback", () => {
     expect(text).toContain("Your answer Wrong");
     expect(text).toContain("Correct answer Right");
     expect(text).toContain('Feedback Not quite — the correct answer is "Right".');
+    expect(text).not.toContain("A strong answer");
+  });
+});
+
+describe("AttemptFeedback while grading", () => {
+  it("shows the answer at once, with the grade, feedback and strong answer still grading", () => {
+    const text = feedbackText(question("recall"), ungraded("pending"));
+
+    const order = ["Grading", "Your confidence: Partly sure", "Your answer", "Retrying is safe.", "Feedback", "Grading", "A strong answer", "Grading"];
+    let from = 0;
+    for (const part of order) {
+      const index = text.indexOf(part, from);
+      expect(index, `"${part}" after position ${from} in: ${text}`).toBeGreaterThanOrEqual(0);
+      from = index + part.length;
+    }
+    expect(text).not.toMatch(/Correct|Incorrect|Partially correct/);
+    expect(text).not.toContain("Retry grading");
+  });
+
+  it("offers the way on while grading", () => {
+    const markup = renderToStaticMarkup(
+      <AttemptFeedback question={question("recall")} attempt={ungraded("pending")} next={<a href="/next">Next question</a>} />,
+    );
+
+    expect(textOf(markup)).toContain("Next question");
+  });
+
+  it("says a failed answer couldn't be graded and offers to retry it", () => {
+    const markup = renderToStaticMarkup(<AttemptFeedback question={question("scenario")} attempt={ungraded("failed")} />);
+    const text = textOf(markup);
+
+    expect(text).toContain("Your answer Retrying is safe.");
+    expect(text).toContain("couldn't be graded");
+    expect(text).toContain("Retry grading");
+    expect(markup).toContain('action="/api/attempts/a1/grading"');
+    expect(markup).toMatch(/method="post"/);
     expect(text).not.toContain("A strong answer");
   });
 });

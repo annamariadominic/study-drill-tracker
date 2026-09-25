@@ -4,10 +4,12 @@ import { ChoiceGroup, Choice, ChoiceLetter, Segment } from "@/components/ui/choi
 import { InlineAlert } from "@/components/ui/feedback";
 import { Label } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/pending-status";
 import { PendingSubmit } from "@/components/ui/pending-submit";
 import { CONFIDENCE_LABEL, CorrectnessMark } from "@/components/ui/status";
-import type { Attempt, Question, QuestionType } from "@/lib/questions/types";
+import type { Attempt, GradedAttempt, Question, QuestionType } from "@/lib/questions/types";
 import { cn } from "@/lib/utils";
+import { GradingWatcher } from "./grading-watcher";
 
 export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
   recall: "Recall",
@@ -121,11 +123,11 @@ export function AnswerForm({
         ))}
       </ChoiceGroup>
 
-      {error === "grading-failed" ? <InlineAlert>Couldn&apos;t grade your answer right now. Try again.</InlineAlert> : null}
+      {error === "submit-failed" ? <InlineAlert>Couldn&apos;t submit your answer right now. Try again.</InlineAlert> : null}
 
       <div className="flex flex-col-reverse items-stretch gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs text-faint">Rate your confidence before you see the grade.</p>
-        <PendingSubmit size="lg" pendingLabel="Grading…">
+        <PendingSubmit size="lg" pendingLabel="Submitting…">
           Submit answer
         </PendingSubmit>
       </div>
@@ -135,7 +137,10 @@ export function AnswerForm({
 
 /**
  * How an Attempt was graded: the outcome, what was answered, why, and — for a
- * free-text Question — what a strong answer would have said.
+ * free-text Question — what a strong answer would have said. A free-text
+ * answer shows at once while its grade is still coming (ADR 0011): the grade,
+ * feedback and strong answer say they're grading and fill in when it arrives,
+ * and a failed grade offers to retry. The way on is there throughout.
  */
 export function AttemptFeedback({
   question,
@@ -156,11 +161,22 @@ export function AttemptFeedback({
         <h2 id="result-heading" className="sr-only">
           Result
         </h2>
-        <CorrectnessMark correctness={attempt.correctness} size="lg" />
+        {attempt.gradingStatus === "failed" ? (
+          <InlineAlert>Your answer couldn&apos;t be graded.</InlineAlert>
+        ) : (
+          // Kept in place from grading to graded, so the grade is announced when it arrives.
+          <div role="status">
+            {attempt.gradingStatus === "graded" ? (
+              <CorrectnessMark correctness={attempt.correctness} size="lg" />
+            ) : (
+              <Grading className="text-base font-medium" />
+            )}
+          </div>
+        )}
         <p className="text-xs text-muted">Your confidence: {CONFIDENCE_LABEL[attempt.confidence]}</p>
       </div>
 
-      {isFlashcard ? (
+      {isFlashcard && attempt.gradingStatus === "graded" ? (
         <FlashcardReview attempt={attempt} correctOption={correctOption} />
       ) : (
         <div className="flex flex-col gap-2">
@@ -171,17 +187,52 @@ export function AttemptFeedback({
         </div>
       )}
 
-      {attempt.gradedExplanation ? (
+      {attempt.gradingStatus === "pending" ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-muted">Feedback</p>
+            <Grading className="text-sm" />
+          </div>
+          {!isFlashcard ? (
+            <ReferenceAnswerFrame>
+              <Grading className="text-sm" />
+            </ReferenceAnswerFrame>
+          ) : null}
+          <GradingWatcher attemptIds={[attempt.id]} />
+        </>
+      ) : null}
+
+      {attempt.gradingStatus === "failed" ? (
+        <form method="post" action={`/api/attempts/${attempt.id}/grading`}>
+          <PendingSubmit variant="secondary" pendingLabel="Retrying…">
+            Retry grading
+          </PendingSubmit>
+        </form>
+      ) : null}
+
+      {attempt.gradingStatus === "graded" && attempt.gradedExplanation ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-muted">Feedback</p>
           <p className="max-w-prose font-serif text-lg leading-relaxed text-text">{attempt.gradedExplanation}</p>
         </div>
       ) : null}
 
-      {!isFlashcard && attempt.referenceAnswer ? <ReferenceAnswer text={attempt.referenceAnswer} /> : null}
+      {!isFlashcard && attempt.gradingStatus === "graded" && attempt.referenceAnswer ? (
+        <ReferenceAnswer text={attempt.referenceAnswer} />
+      ) : null}
 
       {next ? <div className="border-t border-line pt-6">{next}</div> : null}
     </section>
+  );
+}
+
+/** Stands in for part of the feedback while the grade is on its way. */
+export function Grading({ className }: { className?: string }) {
+  return (
+    <span className={cn("inline-flex items-center gap-2 text-muted", className)}>
+      <Spinner className="size-4 motion-reduce:animate-none" />
+      Grading…
+    </span>
   );
 }
 
@@ -190,7 +241,7 @@ export function AttemptFeedback({
  * the text that was submitted and the correct one comes from its stored index,
  * so neither depends on matching option text (which may repeat).
  */
-function FlashcardReview({ attempt, correctOption }: { attempt: Attempt; correctOption: string | null }) {
+function FlashcardReview({ attempt, correctOption }: { attempt: GradedAttempt; correctOption: string | null }) {
   const answeredCorrectly = attempt.correctness === "correct";
   return (
     <dl className="flex flex-col gap-2">
@@ -231,12 +282,20 @@ function FlashcardReview({ attempt, correctOption }: { attempt: Attempt; correct
  */
 function ReferenceAnswer({ text }: { text: string }) {
   return (
+    <ReferenceAnswerFrame>
+      <p className="max-w-prose text-sm leading-relaxed whitespace-pre-wrap text-text">{text}</p>
+    </ReferenceAnswerFrame>
+  );
+}
+
+function ReferenceAnswerFrame({ children }: { children: ReactNode }) {
+  return (
     <div className="flex flex-col gap-2 rounded-control border border-line px-4 py-3">
       <p className="flex items-center gap-1 text-xs font-medium text-correct">
         <Check aria-hidden className="size-3.5" />
         A strong answer
       </p>
-      <p className="max-w-prose text-sm leading-relaxed whitespace-pre-wrap text-text">{text}</p>
+      {children}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assertQuestionConcepts } from "./concepts";
 import type { CreateAttemptInput, CreateQuestionInput, QuestionsRepository } from "./repository";
-import type { Attempt, Question } from "./types";
+import type { Attempt, AttemptGrade, GradedAttempt, GradingStatus, Question } from "./types";
 
 export class FakeQuestionsRepository implements QuestionsRepository {
   private questions = new Map<string, Question>();
@@ -45,18 +45,47 @@ export class FakeQuestionsRepository implements QuestionsRepository {
   }
 
   async createAttempt(input: CreateAttemptInput): Promise<Attempt> {
-    const attempt: Attempt = {
+    const base = {
       id: randomUUID(),
       questionId: input.questionId,
       submittedAnswer: input.submittedAnswer,
       confidence: input.confidence,
-      correctness: input.correctness,
-      gradedExplanation: input.gradedExplanation,
-      referenceAnswer: input.referenceAnswer ?? null,
+      advancesConceptIds: [...input.advancesConceptIds],
       createdAt: new Date().toISOString(),
     };
+    const attempt: Attempt = input.grade
+      ? { ...base, gradingStatus: "graded", ...input.grade }
+      : { ...base, gradingStatus: "pending", correctness: null, gradedExplanation: null, referenceAnswer: null };
     this.attempts.set(attempt.id, attempt);
     return attempt;
+  }
+
+  async recordGrade(id: string, grade: AttemptGrade): Promise<GradedAttempt | null> {
+    const attempt = this.attempts.get(id);
+    if (attempt?.gradingStatus !== "pending") {
+      return null;
+    }
+    const graded: GradedAttempt = { ...attempt, gradingStatus: "graded", ...grade };
+    this.attempts.set(id, graded);
+    return graded;
+  }
+
+  async markGradingFailed(id: string): Promise<Attempt | null> {
+    return this.moveUngraded(id, "pending", "failed");
+  }
+
+  async reopenFailedGrading(id: string): Promise<Attempt | null> {
+    return this.moveUngraded(id, "failed", "pending");
+  }
+
+  private moveUngraded(id: string, from: GradingStatus, to: "pending" | "failed"): Attempt | null {
+    const attempt = this.attempts.get(id);
+    if (!attempt || attempt.gradingStatus !== from || attempt.gradingStatus === "graded") {
+      return null;
+    }
+    const moved: Attempt = { ...attempt, gradingStatus: to };
+    this.attempts.set(id, moved);
+    return moved;
   }
 
   async getAttempt(id: string): Promise<Attempt | null> {

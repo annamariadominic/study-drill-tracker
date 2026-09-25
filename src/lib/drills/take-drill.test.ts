@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeLlmPort } from "@/lib/llm/fake-port";
 import { FakeQuestionsRepository } from "@/lib/questions/fake-repository";
-import { submitAttempt } from "@/lib/study/submit-attempt";
+import { gradeAttempt, submitAttempt } from "@/lib/study/submit-attempt";
 import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
 import { FakeDrillsRepository } from "./fake-repository";
 import { loadDrill } from "./load-drill";
@@ -40,8 +40,8 @@ async function workThrough(deps: Deps, drillId: string) {
 
   while (progress.currentQuestion) {
     const question = progress.currentQuestion;
-    await submitAttempt(
-      { questionsRepo, syllabusRepo, llmPort },
+    const attempt = await submitAttempt(
+      { questionsRepo, syllabusRepo },
       {
         questionId: question.id,
         confidence: "confident",
@@ -49,6 +49,10 @@ async function workThrough(deps: Deps, drillId: string) {
         selectedOptionIndex: question.type === "flashcard" ? 0 : undefined,
       },
     );
+    // As the attempts route does once it has responded.
+    if (attempt.gradingStatus === "pending") {
+      await gradeAttempt({ questionsRepo, syllabusRepo, llmPort }, attempt.id);
+    }
 
     progress = await loadProgress();
   }

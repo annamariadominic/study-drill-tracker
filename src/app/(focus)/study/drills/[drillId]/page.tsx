@@ -5,6 +5,7 @@ import { AnswerForm, AttemptFeedback, QuestionPrompt } from "@/components/study/
 import { buttonVariants } from "@/components/ui/button";
 import { PendingLink } from "@/components/ui/pending-link";
 import { getDrillsRepository } from "@/lib/drills/get-repository";
+import { stepOutcome } from "@/lib/drills/drill-progress";
 import { drillConceptNames, loadDrill } from "@/lib/drills/load-drill";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import type { Question } from "@/lib/questions/types";
@@ -41,7 +42,7 @@ export default async function DrillPage({
   const justAnswered = attemptId
     ? progress.steps.find((step) => step.attempt?.id === attemptId)
     : undefined;
-  const outcomes = progress.steps.map((step) => step.attempt?.correctness ?? null);
+  const outcomes = progress.steps.map(stepOutcome);
   const numberOf = (question: Question) => progress.steps.findIndex((step) => step.question.id === question.id) + 1;
 
   if (justAnswered?.attempt) {

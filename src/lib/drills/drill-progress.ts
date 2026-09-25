@@ -6,21 +6,48 @@ export type DrillStep = {
   attempt: Attempt | null;
 };
 
-export type DrillSummary = Record<Correctness, number> & { total: number };
+/**
+ * How a Drill's Questions turned out. Only graded Attempts count towards the
+ * outcomes; Attempts still being graded, or whose grading failed, are counted
+ * apart until they have a grade.
+ */
+export type DrillSummary = Record<Correctness, number> & { grading: number; failed: number; total: number };
+
+/** A step's outcome as the progress bar and results show it. */
+export type StepOutcome = Correctness | "grading" | "failed";
 
 export type DrillProgress = {
   steps: DrillStep[];
   /** The Question to ask next, or null once the Drill is finished. */
   currentQuestion: Question | null;
+  /** Answered includes Attempts still being graded, so the learner can move on. */
   answeredCount: number;
   completed: boolean;
   summary: DrillSummary;
+  /** The Attempts still waiting on their grade, to watch for it arriving. */
+  gradingAttemptIds: string[];
 };
+
+/** The step's outcome, or null while its Question is unanswered. */
+export function stepOutcome(step: DrillStep): StepOutcome | null {
+  if (!step.attempt) {
+    return null;
+  }
+  switch (step.attempt.gradingStatus) {
+    case "graded":
+      return step.attempt.correctness;
+    case "pending":
+      return "grading";
+    case "failed":
+      return "failed";
+  }
+}
 
 /**
  * Where a Drill has got to, given its Questions and the Attempts recorded
  * against them. A Question is answered once it has an Attempt; only the first
- * Attempt counts, so re-submitting can't re-write the Drill's outcome.
+ * Attempt counts, so re-submitting can't re-write the Drill's outcome. An
+ * Attempt counts as answered while it's still being graded.
  */
 export function drillProgress(questions: Question[], attempts: Attempt[]): DrillProgress {
   const firstAttempts = new Map<string, Attempt>();
@@ -35,10 +62,11 @@ export function drillProgress(questions: Question[], attempts: Attempt[]): Drill
     attempt: firstAttempts.get(question.id) ?? null,
   }));
 
-  const summary: DrillSummary = { correct: 0, partial: 0, incorrect: 0, total: steps.length };
+  const summary: DrillSummary = { correct: 0, partial: 0, incorrect: 0, grading: 0, failed: 0, total: steps.length };
   for (const step of steps) {
-    if (step.attempt) {
-      summary[step.attempt.correctness] += 1;
+    const outcome = stepOutcome(step);
+    if (outcome) {
+      summary[outcome] += 1;
     }
   }
 
@@ -49,5 +77,8 @@ export function drillProgress(questions: Question[], attempts: Attempt[]): Drill
     answeredCount: steps.filter((step) => step.attempt !== null).length,
     completed: current === null,
     summary,
+    gradingAttemptIds: steps.flatMap((step) =>
+      step.attempt?.gradingStatus === "pending" ? [step.attempt.id] : [],
+    ),
   };
 }

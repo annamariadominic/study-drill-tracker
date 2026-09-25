@@ -20,8 +20,8 @@ describe("loadDrill", () => {
       questionId: question.id,
       submittedAnswer: "Same effect however often it runs.",
       confidence: "confident",
-      correctness: "correct",
-      gradedExplanation: "Correct.",
+      advancesConceptIds: ["concept-1"],
+      grade: { correctness: "correct", gradedExplanation: "Correct.", referenceAnswer: null },
     });
 
     const held = holdCalls();
