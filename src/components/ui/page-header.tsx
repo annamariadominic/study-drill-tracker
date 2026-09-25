@@ -2,8 +2,11 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "./skeleton";
 
 export type Crumb = { label: string; href: string };
+
+const HEADER = "mb-10 flex flex-col gap-3";
 
 /** Where a page sits in the Domain > Subject > Concept hierarchy. */
 export function Breadcrumbs({ crumbs }: { crumbs: Crumb[] }) {
@@ -48,7 +51,7 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("mb-10 flex flex-col gap-3", className)}>
+    <header className={cn(HEADER, className)}>
       {crumbs && crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} /> : null}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
@@ -84,6 +87,34 @@ export function SectionHeading({
         {count !== undefined ? <span className="ml-2 font-normal tabular-nums text-faint">{count}</span> : null}
       </h2>
       {trailing}
+    </div>
+  );
+}
+
+/**
+ * PageHeader's shape while the page loads. Each line is one line-height of the
+ * type it stands in for, so the real header takes exactly its place. Say
+ * which of breadcrumb, description and actions the page has, or it jumps.
+ */
+export function PageHeaderSkeleton({
+  crumbs = false,
+  description = false,
+  actions = false,
+}: {
+  crumbs?: boolean;
+  description?: boolean;
+  actions?: boolean;
+}) {
+  return (
+    <div className={HEADER}>
+      {crumbs ? <Skeleton className="h-(--text-xs--line-height) w-12" /> : null}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-(--text-2xl--line-height) w-56 max-w-full" />
+          {description ? <Skeleton className="mt-2 h-(--text-sm--line-height) w-full max-w-md" /> : null}
+        </div>
+        {actions ? <Skeleton className="h-8 w-40 shrink-0" /> : null}
+      </div>
     </div>
   );
 }

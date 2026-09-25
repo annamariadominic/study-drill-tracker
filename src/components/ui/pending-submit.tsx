@@ -1,9 +1,9 @@
 "use client";
 
-import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { buttonVariants, type ButtonVariantProps } from "./button";
+import { PendingStatus, Spinner } from "./pending-status";
 
 /**
  * A submit button for a plain HTML form post. Once its form submits, it
@@ -60,17 +60,14 @@ export function PendingSubmit({
       >
         {pending ? (
           <>
-            <LoaderCircle className="animate-spin" aria-hidden />
+            <Spinner />
             {pendingLabel}
           </>
         ) : (
           children
         )}
       </button>
-      {/* Mounted from the start so screen readers announce the change when it fills in. */}
-      <span role="status" className="sr-only">
-        {pending ? pendingLabel : null}
-      </span>
+      <PendingStatus pending={pending} label={pendingLabel} />
     </>
   );
 }

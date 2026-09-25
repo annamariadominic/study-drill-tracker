@@ -38,20 +38,42 @@ export function DrillFrame({
 }) {
   const { href, label } = origin(drill);
   return (
+    <DrillShell
+      exit={
+        <Link
+          href={href}
+          className="-ml-2 flex h-9 items-center gap-1.5 rounded-control px-2 text-xs text-muted transition-colors hover:bg-surface hover:text-text"
+        >
+          <X aria-hidden className="size-4" />
+          <span className="sm:hidden">
+            Exit<span className="sr-only"> to {label}</span>
+          </span>
+          <span className="hidden sm:inline">Exit to {label}</span>
+        </Link>
+      }
+      progress={<DrillProgressBar outcomes={outcomes} currentIndex={currentIndex} />}
+    >
+      {children}
+    </DrillShell>
+  );
+}
+
+/** The Drill screen's layout, shared by the real frame and its loading state so they line up. */
+export function DrillShell({
+  exit,
+  progress,
+  children,
+}: {
+  exit: ReactNode;
+  progress: ReactNode;
+  children: ReactNode;
+}) {
+  return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-20 border-b border-line bg-bg/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link
-            href={href}
-            className="-ml-2 flex h-9 items-center gap-1.5 rounded-control px-2 text-xs text-muted transition-colors hover:bg-surface hover:text-text"
-          >
-            <X aria-hidden className="size-4" />
-            <span className="sm:hidden">
-              Exit<span className="sr-only"> to {label}</span>
-            </span>
-            <span className="hidden sm:inline">Exit to {label}</span>
-          </Link>
-          <DrillProgressBar outcomes={outcomes} currentIndex={currentIndex} />
+          {exit}
+          {progress}
         </div>
       </header>
       <main className="mx-auto flex max-w-2xl flex-col gap-10 px-4 pt-10 pb-24 sm:px-6 sm:pt-16">{children}</main>
