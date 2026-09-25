@@ -9,16 +9,19 @@
  * costs money: a few dollars for a full run.
  *
  * The report holds the learner's own notes and answers, so it's written to
- * the path given (outside the repo by default), not committed.
+ * the path given, or the system temp folder, never into the repo.
  *
  * Usage:
  *   npx tsx --env-file=.env.local scripts/compare-llm-settings.ts [report.md]
  */
 
 import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   AnthropicLlmPort,
+  CALL_TYPES,
   type CallType,
   type LlmSettings,
   type ModelSettings,
@@ -31,7 +34,7 @@ import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import { listStudiedConcepts, type StudiedConcept } from "@/lib/syllabus/list-studied-concepts";
 
 const CANDIDATES: { label: string; settings: ModelSettings }[] = [
-  { label: "Opus 5, default (current)", settings: { model: "claude-opus-5" } },
+  { label: "Opus 5, default (before #20)", settings: { model: "claude-opus-5" } },
   { label: "Opus 5, effort low", settings: { model: "claude-opus-5", effort: "low" } },
   { label: "Opus 5, fast mode", settings: { model: "claude-opus-5", speed: "fast" } },
   { label: "Sonnet 5, effort low", settings: { model: "claude-sonnet-5", effort: "low" } },
@@ -186,9 +189,7 @@ async function buildCases(): Promise<Case[]> {
 
 async function runCandidate(settings: ModelSettings, cases: Case[]): Promise<Run[]> {
   const { client, record, costOf } = recordingClient(settings.model);
-  const all = Object.fromEntries(
-    (["writeRecall", "writeFlashcard", "writeScenario", "gradeRecall", "gradeScenario"] as const).map((t) => [t, settings]),
-  ) as LlmSettings;
+  const all = Object.fromEntries(CALL_TYPES.map((callType) => [callType, settings])) as LlmSettings;
   const port = new AnthropicLlmPort(client, all);
   const runs: Run[] = [];
   for (const one of cases) {
@@ -215,7 +216,8 @@ async function runCandidate(settings: ModelSettings, cases: Case[]): Promise<Run
 const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n+/g, "<br>");
 
 async function main() {
-  const reportPath = process.argv[2] ?? "llm-settings-comparison.md";
+  // Never the repo by default: the report quotes the learner's notes and answers.
+  const reportPath = process.argv[2] ?? join(tmpdir(), "llm-settings-comparison.md");
   const cases = await buildCases();
   console.log(`${cases.length} cases × ${CANDIDATES.length} settings`);
   const results = await Promise.all(CANDIDATES.map(({ settings }) => runCandidate(settings, cases)));

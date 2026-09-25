@@ -22,8 +22,8 @@ The learner chose these from a side-by-side run on their own material: 7 Questio
 
 The whole sample cost $0.28 on Opus 5 at default effort and $0.02 on Haiku 4.5. Quality decided the grading choice: Haiku 4.5 gave the same grade as Opus 5 at default effort on all five Attempts, while Opus 5 and Sonnet 5 at low effort each graded two partial answers as correct. Haiku's strong answers are shorter. Scenario Questions went to Sonnet 5 rather than Haiku because writing one means reasoning about several Concepts together.
 
-Fast mode (Opus 5 at up to 2.5× output speed, twice the price) was a candidate for grading, but this account's fast-mode rate limit is zero, so it couldn't be measured. The port still supports it: a fast-mode request goes through the beta endpoint and falls back to standard speed on a 429.
+Fast mode (Opus 5 at up to 2.5× output speed, twice the price) was a candidate for grading, but this account's fast-mode rate limit is zero, so it couldn't be measured. The port still supports it: a fast-mode request goes through the beta endpoint and falls back to standard speed on a 429 or any other failure worth retrying.
 
 `max_tokens` now leaves room for thinking (16000 where the model thinks adaptively, 4096 on Haiku 4.5). The old limits of 1024 and 2048 also capped how long Opus 5 could think. That is why the Opus 5 default above is slower than the 7.8 s grade measured before this change.
 
-Changing a setting is one line in `LLM_SETTINGS`. Rerun the comparison script before and after any change, and compare the grades as well as the times.
+Changing a setting is one line in `LLM_SETTINGS`. Rerun the comparison script before and after any change, and compare the grades as well as the times. It replaces `scripts/measure-llm-latency.ts`, which kept its own copies of the prompts; the comparison runs the port itself, so it can't drift from what the app sends.

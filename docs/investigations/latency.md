@@ -40,7 +40,7 @@ Scenario Questions have longer prompts and answers than the sample benchmark, so
 
 The syllabus reads are N+1: one query for Domains, then one per Domain for Subjects, then one per Subject for Concepts (3 Domains and 24 Subjects today). This grows with the library.
 
-**Model** (`scripts/measure-llm-latency.ts`, sample recall Question and grading):
+**Model** (`scripts/measure-llm-latency.ts`, since replaced by `scripts/compare-llm-settings.ts`; sample recall Question and grading):
 
 | Settings | Write 1 Question | Drill waits (10 parallel) | Grade 1 answer | Grading output tokens |
 |---|---|---|---|---|

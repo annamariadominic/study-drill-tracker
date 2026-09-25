@@ -1,4 +1,4 @@
-import Anthropic, { RateLimitError } from "@anthropic-ai/sdk";
+import Anthropic, { APIError, RateLimitError } from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { AnthropicLlmPort, LLM_SETTINGS, type LlmSettings } from "./anthropic-port";
 
@@ -9,12 +9,14 @@ type Call = { endpoint: "standard" | "beta"; params: Record<string, unknown> };
  * with `output` as the parsed structured output. `failFast` makes fast-mode
  * requests fail with a 429, as they do when fast mode's own rate limit is hit.
  */
-function fakeClient(output: unknown, { failFast = false } = {}) {
+function fakeClient(output: unknown, { failFast = false as boolean | "overloaded" } = {}) {
   const calls: Call[] = [];
   const parse = (endpoint: Call["endpoint"]) => async (params: Record<string, unknown>) => {
     calls.push({ endpoint, params });
     if (failFast && params.speed === "fast") {
-      throw new RateLimitError(429, undefined, "Fast mode rate limit", new Headers());
+      throw failFast === "overloaded"
+        ? APIError.generate(529, undefined, "Overloaded", new Headers())
+        : new RateLimitError(429, undefined, "Fast mode rate limit", new Headers());
     }
     return { parsed_output: output, usage: { input_tokens: 1, output_tokens: 1 } };
   };
@@ -112,5 +114,21 @@ describe("AnthropicLlmPort", () => {
     expect(calls.map(({ endpoint }) => endpoint)).toEqual(["beta", "standard"]);
     expect(calls[1].params).not.toHaveProperty("speed");
     expect(calls[1].params.model).toBe("claude-opus-5");
+  });
+
+  it("also falls back to standard speed when fast mode is overloaded, rather than failing", async () => {
+    const { port, calls } = portWith(
+      { gradeRecall: { model: "claude-opus-5", speed: "fast" } },
+      graded,
+      { failFast: "overloaded" },
+    );
+    const result = await port.gradeAnswer({
+      question: { type: "recall", prompt: "Explain idempotency." },
+      concepts: [concept],
+      submittedAnswer: "You can call it twice.",
+    });
+
+    expect(result).toEqual(graded);
+    expect(calls.map(({ endpoint }) => endpoint)).toEqual(["beta", "standard"]);
   });
 });

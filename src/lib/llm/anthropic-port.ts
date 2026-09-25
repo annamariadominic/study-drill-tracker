@@ -1,4 +1,4 @@
-import { RateLimitError, type default as Anthropic } from "@anthropic-ai/sdk";
+import { APIConnectionError, APIError, RateLimitError, type default as Anthropic } from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
@@ -25,7 +25,9 @@ export type ModelSettings =
   | { model: "claude-haiku-4-5" };
 
 /** Each kind of call the port makes, so each can trade speed and cost against quality on its own. */
-export type CallType = "writeRecall" | "writeFlashcard" | "writeScenario" | "gradeRecall" | "gradeScenario";
+export const CALL_TYPES = ["writeRecall", "writeFlashcard", "writeScenario", "gradeRecall", "gradeScenario"] as const;
+
+export type CallType = (typeof CALL_TYPES)[number];
 
 export type LlmSettings = Record<CallType, ModelSettings>;
 
@@ -44,6 +46,19 @@ export const LLM_SETTINGS: LlmSettings = {
 };
 
 const FAST_MODE_BETA = "fast-mode-2026-02-01";
+
+/**
+ * Failures worth retrying. The fast-mode request doesn't retry them itself:
+ * a 429 there means fast mode's own limit, and for the rest standard speed
+ * is as good a retry as the same request again.
+ */
+function isRetryable(error: unknown) {
+  return (
+    error instanceof RateLimitError ||
+    error instanceof APIConnectionError ||
+    (error instanceof APIError && typeof error.status === "number" && error.status >= 500)
+  );
+}
 
 /** Room for adaptive thinking as well as the answer; Haiku 4.5 doesn't think unless asked. */
 function maxTokens(settings: ModelSettings) {
@@ -152,9 +167,9 @@ export class AnthropicLlmPort implements LlmPort {
   }
 
   /**
-   * One structured-output request, sent with the call type's settings. Fast
-   * mode has its own rate limit; when it's hit, the same request goes again at
-   * standard speed rather than waiting or failing.
+   * One structured-output request, sent with the call type's settings. When a
+   * fast-mode request hits fast mode's own rate limit, or fails in any other
+   * way worth retrying, the same request goes again at standard speed.
    */
   private async parse<T>(
     callType: CallType,
@@ -178,12 +193,11 @@ export class AnthropicLlmPort implements LlmPort {
             betas: [FAST_MODE_BETA],
             output_config: { ...effort, format: betaZodOutputFormat(request.schema) },
           },
-          // No retries: a 429 here means fast mode's limit, and standard speed is the better retry.
           { maxRetries: 0 },
         );
         return parsedOrThrow(response.parsed_output as T | null, request.what);
       } catch (error) {
-        if (!(error instanceof RateLimitError)) {
+        if (!isRetryable(error)) {
           throw error;
         }
       }
