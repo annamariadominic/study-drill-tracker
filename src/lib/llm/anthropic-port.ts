@@ -1,4 +1,5 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import { RateLimitError, type default as Anthropic } from "@anthropic-ai/sdk";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import type {
@@ -10,7 +11,39 @@ import type {
   QuestionConcept,
 } from "./port";
 
-const MODEL = "claude-opus-5";
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
+/**
+ * The model to call and how. Only what each model accepts can be set: Haiku
+ * 4.5 takes no effort, and fast mode is Opus 5 only (a research preview on the
+ * Claude API, at twice the per-token price). Opus 5 and Sonnet 5 think
+ * adaptively; effort defaults to "high".
+ */
+export type ModelSettings =
+  | { model: "claude-opus-5"; effort?: Effort; speed?: "fast" }
+  | { model: "claude-sonnet-5"; effort?: Effort }
+  | { model: "claude-haiku-4-5" };
+
+/** Each kind of call the port makes, so each can trade speed and cost against quality on its own. */
+export type CallType = "writeRecall" | "writeFlashcard" | "writeScenario" | "gradeRecall" | "gradeScenario";
+
+export type LlmSettings = Record<CallType, ModelSettings>;
+
+/** What every call used before settings were split by call type: Opus 5, defaults. */
+export const CURRENT_SETTINGS: LlmSettings = {
+  writeRecall: { model: "claude-opus-5" },
+  writeFlashcard: { model: "claude-opus-5" },
+  writeScenario: { model: "claude-opus-5" },
+  gradeRecall: { model: "claude-opus-5" },
+  gradeScenario: { model: "claude-opus-5" },
+};
+
+const FAST_MODE_BETA = "fast-mode-2026-02-01";
+
+/** Room for adaptive thinking as well as the answer; Haiku 4.5 doesn't think unless asked. */
+function maxTokens(settings: ModelSettings) {
+  return settings.model === "claude-haiku-4-5" ? 4096 : 16000;
+}
 
 const PromptOnlySchema = z.object({
   prompt: z.string(),
@@ -57,79 +90,111 @@ function describeConcepts(concepts: QuestionConcept[]): string {
 }
 
 export class AnthropicLlmPort implements LlmPort {
-  constructor(private readonly client: Anthropic) {}
+  constructor(
+    private readonly client: Anthropic,
+    private readonly settings: LlmSettings = CURRENT_SETTINGS,
+  ) {}
 
   async generateQuestion(input: GenerateQuestionInput): Promise<GeneratedQuestion> {
+    const content = describeConcepts(input.concepts);
+
     if (input.type === "scenario") {
-      const response = await this.client.messages.parse({
-        model: MODEL,
-        max_tokens: 1024,
+      const { prompt } = await this.parse("writeScenario", {
         system:
           "You write a single realistic applied scenario question that can only be answered well by reasoning about all of the given concepts together. Describe a concrete situation or problem and ask the learner how they would approach it, without naming or giving away the answer.",
-        messages: [{ role: "user", content: describeConcepts(input.concepts) }],
-        output_config: { format: zodOutputFormat(PromptOnlySchema) },
+        content,
+        schema: PromptOnlySchema,
+        what: "generate scenario question",
       });
-      if (!response.parsed_output) {
-        throw new Error("Failed to generate scenario question: no parsed output");
-      }
-      return { type: "scenario", prompt: response.parsed_output.prompt };
+      return { type: "scenario", prompt };
     }
 
     if (input.type === "recall") {
-      const response = await this.client.messages.parse({
-        model: MODEL,
-        max_tokens: 1024,
+      const { prompt } = await this.parse("writeRecall", {
         system:
           "You write a single concise active-recall study question for a given concept. The question should prompt the learner to explain or apply the concept from memory, without giving away the answer.",
-        messages: [{ role: "user", content: describeConcepts(input.concepts) }],
-        output_config: { format: zodOutputFormat(PromptOnlySchema) },
+        content,
+        schema: PromptOnlySchema,
+        what: "generate recall question",
       });
-      if (!response.parsed_output) {
-        throw new Error("Failed to generate recall question: no parsed output");
-      }
-      return { type: "recall", prompt: response.parsed_output.prompt };
+      return { type: "recall", prompt };
     }
 
-    const response = await this.client.messages.parse({
-      model: MODEL,
-      max_tokens: 1024,
+    const flashcard = await this.parse("writeFlashcard", {
       system:
         "You write a single multiple-choice flashcard question for a given concept, with 3-4 plausible options. Exactly one option is correct. correctOptionIndex is the zero-based index of the correct option in the options array.",
-      messages: [{ role: "user", content: describeConcepts(input.concepts) }],
-      output_config: { format: zodOutputFormat(FlashcardQuestionSchema) },
+      content,
+      schema: FlashcardQuestionSchema,
+      what: "generate flashcard question",
     });
-    if (!response.parsed_output) {
-      throw new Error("Failed to generate flashcard question: no parsed output");
-    }
-    return { type: "flashcard", ...response.parsed_output };
+    return { type: "flashcard", ...flashcard };
   }
 
   async gradeAnswer(input: GradeAnswerInput): Promise<GradedAnswer> {
-    const system =
-      input.question.type === "scenario"
-        ? `${GRADING_SYSTEM_PROMPT}\n\n${SCENARIO_GRADING_GUIDANCE}`
-        : GRADING_SYSTEM_PROMPT;
-    const response = await this.client.messages.parse({
-      model: MODEL,
-      max_tokens: 2048,
-      system,
-      messages: [
-        {
-          role: "user",
-          content: [
-            `Question: ${input.question.prompt}`,
-            describeConcepts(input.concepts),
-            `Learner's answer: ${input.submittedAnswer}`,
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
-      output_config: { format: zodOutputFormat(GradedAnswerSchema) },
+    const scenario = input.question.type === "scenario";
+    return this.parse(scenario ? "gradeScenario" : "gradeRecall", {
+      system: scenario ? `${GRADING_SYSTEM_PROMPT}\n\n${SCENARIO_GRADING_GUIDANCE}` : GRADING_SYSTEM_PROMPT,
+      content: [
+        `Question: ${input.question.prompt}`,
+        describeConcepts(input.concepts),
+        `Learner's answer: ${input.submittedAnswer}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      schema: GradedAnswerSchema,
+      what: "grade answer",
     });
-    if (!response.parsed_output) {
-      throw new Error("Failed to grade answer: no parsed output");
-    }
-    return response.parsed_output;
   }
+
+  /**
+   * One structured-output request, sent with the call type's settings. Fast
+   * mode has its own rate limit; when it's hit, the same request goes again at
+   * standard speed rather than waiting or failing.
+   */
+  private async parse<T>(
+    callType: CallType,
+    request: { system: string; content: string; schema: z.ZodType<T>; what: string },
+  ): Promise<T> {
+    const settings = this.settings[callType];
+    const base = {
+      model: settings.model,
+      max_tokens: maxTokens(settings),
+      system: request.system,
+      messages: [{ role: "user" as const, content: request.content }],
+    };
+    const effort = "effort" in settings && settings.effort ? { effort: settings.effort } : {};
+
+    if ("speed" in settings && settings.speed === "fast") {
+      try {
+        const response = await this.client.beta.messages.parse(
+          {
+            ...base,
+            speed: "fast",
+            betas: [FAST_MODE_BETA],
+            output_config: { ...effort, format: betaZodOutputFormat(request.schema) },
+          },
+          // No retries: a 429 here means fast mode's limit, and standard speed is the better retry.
+          { maxRetries: 0 },
+        );
+        return parsedOrThrow(response.parsed_output as T | null, request.what);
+      } catch (error) {
+        if (!(error instanceof RateLimitError)) {
+          throw error;
+        }
+      }
+    }
+
+    const response = await this.client.messages.parse({
+      ...base,
+      output_config: { ...effort, format: zodOutputFormat(request.schema) },
+    });
+    return parsedOrThrow(response.parsed_output as T | null, request.what);
+  }
+}
+
+function parsedOrThrow<T>(output: T | null | undefined, what: string): T {
+  if (output == null) {
+    throw new Error(`Failed to ${what}: no parsed output`);
+  }
+  return output;
 }
