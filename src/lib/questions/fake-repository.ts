@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assertQuestionConcepts } from "./concepts";
 import type { CreateAttemptInput, CreateQuestionInput, QuestionsRepository } from "./repository";
-import type { Attempt, AttemptGrade, GradedAttempt, GradingStatus, Question } from "./types";
+import type { Attempt, AttemptGrade, GradedAttempt, Question } from "./types";
 
 export class FakeQuestionsRepository implements QuestionsRepository {
   private questions = new Map<string, Question>();
@@ -45,13 +45,15 @@ export class FakeQuestionsRepository implements QuestionsRepository {
   }
 
   async createAttempt(input: CreateAttemptInput): Promise<Attempt> {
+    const now = new Date().toISOString();
     const base = {
       id: randomUUID(),
       questionId: input.questionId,
       submittedAnswer: input.submittedAnswer,
       confidence: input.confidence,
       advancesConceptIds: [...input.advancesConceptIds],
-      createdAt: new Date().toISOString(),
+      gradingStartedAt: now,
+      createdAt: now,
     };
     const attempt: Attempt = input.grade
       ? { ...base, gradingStatus: "graded", ...input.grade }
@@ -71,21 +73,24 @@ export class FakeQuestionsRepository implements QuestionsRepository {
   }
 
   async markGradingFailed(id: string): Promise<Attempt | null> {
-    return this.moveUngraded(id, "pending", "failed");
-  }
-
-  async reopenFailedGrading(id: string): Promise<Attempt | null> {
-    return this.moveUngraded(id, "failed", "pending");
-  }
-
-  private moveUngraded(id: string, from: GradingStatus, to: "pending" | "failed"): Attempt | null {
     const attempt = this.attempts.get(id);
-    if (!attempt || attempt.gradingStatus !== from || attempt.gradingStatus === "graded") {
+    if (attempt?.gradingStatus !== "pending") {
       return null;
     }
-    const moved: Attempt = { ...attempt, gradingStatus: to };
-    this.attempts.set(id, moved);
-    return moved;
+    const failed: Attempt = { ...attempt, gradingStatus: "failed" };
+    this.attempts.set(id, failed);
+    return failed;
+  }
+
+  async reopenGrading(id: string, stalledBefore: string): Promise<Attempt | null> {
+    const attempt = this.attempts.get(id);
+    const stalled = attempt?.gradingStatus === "pending" && Date.parse(attempt.gradingStartedAt) < Date.parse(stalledBefore);
+    if (!attempt || attempt.gradingStatus === "graded" || (attempt.gradingStatus === "pending" && !stalled)) {
+      return null;
+    }
+    const reopened: Attempt = { ...attempt, gradingStatus: "pending", gradingStartedAt: new Date().toISOString() };
+    this.attempts.set(id, reopened);
+    return reopened;
   }
 
   async getAttempt(id: string): Promise<Attempt | null> {

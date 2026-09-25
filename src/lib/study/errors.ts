@@ -5,7 +5,7 @@ export class ConceptNotStudiedError extends Error {
   }
 }
 
-/** Grading can only be retried once it has failed. */
+/** Grading can only be retried once it has failed, or stalled past its time limit. */
 export class GradingNotFailedError extends Error {
   constructor(attemptId: string) {
     super(`Attempt's grading hasn't failed: ${attemptId}`);

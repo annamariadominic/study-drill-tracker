@@ -41,8 +41,13 @@ export interface QuestionsRepository {
   recordGrade(id: string, grade: AttemptGrade): Promise<GradedAttempt | null>;
   /** Marks a pending Attempt's grading as failed; null, changing nothing, if it isn't pending. */
   markGradingFailed(id: string): Promise<Attempt | null>;
-  /** Puts a failed Attempt back to pending for another try; null, changing nothing, if it hasn't failed. */
-  reopenFailedGrading(id: string): Promise<Attempt | null>;
+  /**
+   * Puts an Attempt back to pending for another try, restarting its grading
+   * clock: one that failed, or one still pending whose grading started before
+   * `stalledBefore` and so can no longer finish. Null, changing nothing, for
+   * any other Attempt.
+   */
+  reopenGrading(id: string, stalledBefore: string): Promise<Attempt | null>;
   /** Attempts on one Drill's Questions, oldest first. */
   listDrillAttempts(drillId: string): Promise<Attempt[]>;
 }

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeLlmPort } from "@/lib/llm/fake-port";
 import { FakeQuestionsRepository } from "@/lib/questions/fake-repository";
+import { GRADING_TIME_LIMIT_MS } from "@/lib/study/grading";
 import { FakeSyllabusRepository } from "@/lib/syllabus/fake-repository";
 
 const fakes = vi.hoisted(() => ({
@@ -104,6 +105,21 @@ describe("/api/attempts/[attemptId]/grading", () => {
       expect(response.headers.get("location")).toBe(
         `https://drills.example.com/study/questions/${question.id}?attemptId=${attempt.id}`,
       );
+    });
+
+    it("retries an Attempt left pending past the grading time limit", async () => {
+      const { attempt } = await pendingAttempt();
+      vi.useFakeTimers({ now: Date.parse(attempt.gradingStartedAt) + GRADING_TIME_LIMIT_MS + 1, toFake: ["Date"] });
+      try {
+        const response = await POST(new NextRequest(url(attempt.id), { method: "POST" }), params(attempt.id));
+        expect(response.status).toBe(303);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      await runAfterResponse();
+
+      expect((await fakes.questionsRepo.getAttempt(attempt.id))?.gradingStatus).toBe("graded");
     });
 
     it("leaves an Attempt that hasn't failed alone, and goes back to its feedback", async () => {

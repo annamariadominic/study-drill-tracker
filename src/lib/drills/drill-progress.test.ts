@@ -33,6 +33,7 @@ function attempt(id: string, questionId: string, correctness: Correctness): Atte
     submittedAnswer: "An answer.",
     confidence: "partial",
     advancesConceptIds: [],
+    gradingStartedAt: new Date().toISOString(),
     gradingStatus: "graded",
     correctness,
     gradedExplanation: "Because.",
@@ -121,5 +122,15 @@ describe("drillProgress", () => {
 
     expect(progress.steps.map(stepOutcome)).toEqual(["grading", "failed", null]);
     expect(stepOutcome(graded.steps[0])).toBe("partial");
+  });
+
+  it("counts a grade stalled past the time limit as failed, and stops watching it", () => {
+    const stalled = { ...ungraded("a1", "q1", "pending"), gradingStartedAt: "2000-01-01T00:00:00.000Z" };
+
+    const progress = drillProgress(questions, [stalled]);
+
+    expect(stepOutcome(progress.steps[0])).toBe("failed");
+    expect(progress.gradingAttemptIds).toEqual([]);
+    expect(progress.summary.failed).toBe(1);
   });
 });

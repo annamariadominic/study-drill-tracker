@@ -7,6 +7,7 @@ import { CorrectnessMark } from "@/components/ui/status";
 import { stepOutcome, type DrillProgress, type StepOutcome } from "@/lib/drills/drill-progress";
 import type { Drill } from "@/lib/drills/types";
 import type { Correctness, Question } from "@/lib/questions/types";
+import { feedbackPath } from "@/lib/study/grading";
 import { GradingWatcher } from "./grading-watcher";
 import { Grading, QUESTION_TYPE_LABEL } from "./question";
 
@@ -137,11 +138,11 @@ export function DrillResults({
               <p className="text-sm text-text">{conceptList(step.question, conceptNames).join(" + ")}</p>
               <p className="text-xs text-muted">{QUESTION_TYPE_LABEL[step.question.type]}</p>
               <p className="mt-2 sm:hidden">
-                <StepResult outcome={stepOutcome(step)} feedbackHref={feedbackHref(drill, step.attempt?.id)} />
+                <StepResult outcome={stepOutcome(step)} feedbackHref={step.attempt ? feedbackPath(step.question, step.attempt.id) : undefined} />
               </p>
             </div>
             <span className="hidden shrink-0 pt-0.5 sm:block">
-              <StepResult outcome={stepOutcome(step)} feedbackHref={feedbackHref(drill, step.attempt?.id)} />
+              <StepResult outcome={stepOutcome(step)} feedbackHref={step.attempt ? feedbackPath(step.question, step.attempt.id) : undefined} />
             </span>
           </li>
         ))}
@@ -165,11 +166,6 @@ export function DrillResults({
       </div>
     </>
   );
-}
-
-/** The feedback screen of one of the Drill's Attempts, where a failed grade can be retried. */
-function feedbackHref(drill: Drill, attemptId: string | undefined) {
-  return attemptId ? `/study/drills/${drill.id}?attemptId=${attemptId}` : undefined;
 }
 
 function StepResult({ outcome, feedbackHref }: { outcome: StepOutcome | null; feedbackHref?: string }) {

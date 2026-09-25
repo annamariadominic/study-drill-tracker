@@ -4,6 +4,7 @@ import type { QuestionsRepository } from "@/lib/questions/repository";
 import type { Attempt, AttemptGrade, Confidence, GradedAttempt, Question } from "@/lib/questions/types";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
 import { GradingNotFailedError } from "./errors";
+import { gradingStalledBefore } from "./grading";
 import { initialReviewSchedule, scheduleFromFields, scheduleNextReview } from "./scheduling";
 
 /**
@@ -176,12 +177,17 @@ export async function gradeAttempt(
   return graded;
 }
 
-/** Puts a failed Attempt back to pending, ready for gradeAttempt to try again. */
+/**
+ * Puts a failed Attempt back to pending, ready for gradeAttempt to try again —
+ * or one left pending past the grading time limit, whose grading can no longer
+ * finish.
+ */
 export async function retryGrading(
   deps: { questionsRepo: QuestionsRepository },
   attemptId: string,
+  now: Date = new Date(),
 ): Promise<Attempt> {
-  const reopened = await deps.questionsRepo.reopenFailedGrading(attemptId);
+  const reopened = await deps.questionsRepo.reopenGrading(attemptId, gradingStalledBefore(now).toISOString());
   if (reopened) {
     return reopened;
   }

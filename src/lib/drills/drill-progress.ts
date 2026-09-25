@@ -1,4 +1,5 @@
 import type { Attempt, Correctness, Question } from "@/lib/questions/types";
+import { ungradedState } from "@/lib/study/grading";
 
 export type DrillStep = {
   question: Question;
@@ -30,17 +31,11 @@ export type DrillProgress = {
 
 /** The step's outcome, or null while its Question is unanswered. */
 export function stepOutcome(step: DrillStep): StepOutcome | null {
-  if (!step.attempt) {
+  const { attempt } = step;
+  if (!attempt) {
     return null;
   }
-  switch (step.attempt.gradingStatus) {
-    case "graded":
-      return step.attempt.correctness;
-    case "pending":
-      return "grading";
-    case "failed":
-      return "failed";
-  }
+  return attempt.gradingStatus === "graded" ? attempt.correctness : ungradedState(attempt);
 }
 
 /**
@@ -78,7 +73,7 @@ export function drillProgress(questions: Question[], attempts: Attempt[]): Drill
     completed: current === null,
     summary,
     gradingAttemptIds: steps.flatMap((step) =>
-      step.attempt?.gradingStatus === "pending" ? [step.attempt.id] : [],
+      step.attempt && stepOutcome(step) === "grading" ? [step.attempt.id] : [],
     ),
   };
 }

@@ -32,6 +32,7 @@ function attempt(id: string, questionId: string, grade: Correctness | "pending" 
     submittedAnswer: "An answer.",
     confidence: "partial" as const,
     advancesConceptIds: [],
+    gradingStartedAt: new Date().toISOString(),
     createdAt: "2026-01-01T00:01:00.000Z",
   };
   return grade === "pending" || grade === "failed"

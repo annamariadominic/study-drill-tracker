@@ -3,15 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type { GradingStatus } from "@/lib/questions/types";
+import { GRADING_TIME_LIMIT_MS } from "@/lib/study/grading";
 
 const POLL_INTERVAL_MS = 1500;
-/** Beyond the attempts route's max duration, grading can no longer finish: stop asking. */
-const GIVE_UP_AFTER_MS = 5 * 60 * 1000;
 
 /**
  * Watches Attempts still being graded and refreshes the page once any of them
  * has a grade (or has failed), so the server-rendered feedback fills in
- * without a reload. Renders nothing.
+ * without a reload. Past the grading time limit a grade can no longer arrive,
+ * so it refreshes once more, to show the Attempt as failed with its retry, and
+ * stops. Renders nothing.
  */
 export function GradingWatcher({ attemptIds }: { attemptIds: string[] }) {
   const router = useRouter();
@@ -33,8 +34,10 @@ export function GradingWatcher({ attemptIds }: { attemptIds: string[] }) {
       }
       if (statuses.some((status) => status !== null && status !== "pending")) {
         router.refresh();
-      } else if (Date.now() - startedAt < GIVE_UP_AFTER_MS) {
+      } else if (Date.now() - startedAt < GRADING_TIME_LIMIT_MS) {
         timer = setTimeout(check, POLL_INTERVAL_MS);
+      } else {
+        router.refresh();
       }
     };
     timer = setTimeout(check, POLL_INTERVAL_MS);

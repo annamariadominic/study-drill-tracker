@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/pending-status";
 import { PendingSubmit } from "@/components/ui/pending-submit";
 import { CONFIDENCE_LABEL, CorrectnessMark } from "@/components/ui/status";
 import type { Attempt, GradedAttempt, Question, QuestionType } from "@/lib/questions/types";
+import { gradingState } from "@/lib/study/grading";
 import { cn } from "@/lib/utils";
 import { GradingWatcher } from "./grading-watcher";
 
@@ -154,6 +155,8 @@ export function AttemptFeedback({
 }) {
   const isFlashcard = question.type === "flashcard";
   const correctOption = isFlashcard ? (question.options?.[question.correctOptionIndex ?? -1] ?? null) : null;
+  const graded = attempt.gradingStatus === "graded" ? attempt : null;
+  const state = gradingState(attempt);
 
   return (
     <section aria-labelledby="result-heading" className="flex flex-col gap-8">
@@ -161,13 +164,13 @@ export function AttemptFeedback({
         <h2 id="result-heading" className="sr-only">
           Result
         </h2>
-        {attempt.gradingStatus === "failed" ? (
+        {state === "failed" ? (
           <InlineAlert>Your answer couldn&apos;t be graded.</InlineAlert>
         ) : (
           // Kept in place from grading to graded, so the grade is announced when it arrives.
           <div role="status">
-            {attempt.gradingStatus === "graded" ? (
-              <CorrectnessMark correctness={attempt.correctness} size="lg" />
+            {graded ? (
+              <CorrectnessMark correctness={graded.correctness} size="lg" />
             ) : (
               <Grading className="text-base font-medium" />
             )}
@@ -176,8 +179,8 @@ export function AttemptFeedback({
         <p className="text-xs text-muted">Your confidence: {CONFIDENCE_LABEL[attempt.confidence]}</p>
       </div>
 
-      {isFlashcard && attempt.gradingStatus === "graded" ? (
-        <FlashcardReview attempt={attempt} correctOption={correctOption} />
+      {isFlashcard && graded ? (
+        <FlashcardReview attempt={graded} correctOption={correctOption} />
       ) : (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-muted">Your answer</p>
@@ -187,7 +190,7 @@ export function AttemptFeedback({
         </div>
       )}
 
-      {attempt.gradingStatus === "pending" ? (
+      {state === "grading" ? (
         <>
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted">Feedback</p>
@@ -202,7 +205,7 @@ export function AttemptFeedback({
         </>
       ) : null}
 
-      {attempt.gradingStatus === "failed" ? (
+      {state === "failed" ? (
         <form method="post" action={`/api/attempts/${attempt.id}/grading`}>
           <PendingSubmit variant="secondary" pendingLabel="Retrying…">
             Retry grading
@@ -210,16 +213,14 @@ export function AttemptFeedback({
         </form>
       ) : null}
 
-      {attempt.gradingStatus === "graded" && attempt.gradedExplanation ? (
+      {graded?.gradedExplanation ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-muted">Feedback</p>
-          <p className="max-w-prose font-serif text-lg leading-relaxed text-text">{attempt.gradedExplanation}</p>
+          <p className="max-w-prose font-serif text-lg leading-relaxed text-text">{graded.gradedExplanation}</p>
         </div>
       ) : null}
 
-      {!isFlashcard && attempt.gradingStatus === "graded" && attempt.referenceAnswer ? (
-        <ReferenceAnswer text={attempt.referenceAnswer} />
-      ) : null}
+      {!isFlashcard && graded?.referenceAnswer ? <ReferenceAnswer text={graded.referenceAnswer} /> : null}
 
       {next ? <div className="border-t border-line pt-6">{next}</div> : null}
     </section>

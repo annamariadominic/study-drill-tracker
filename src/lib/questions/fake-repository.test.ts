@@ -125,17 +125,29 @@ describe("FakeQuestionsRepository", () => {
       expect((await repo.getAttempt(attempt.id))?.correctness).toBe("partial");
     });
 
+    const stalledBefore = "2000-01-01T00:00:00.000Z";
+
+    it("reopens a pending attempt whose grading started before the given time", async () => {
+      const attempt = await pendingAttempt();
+
+      expect(await repo.reopenGrading(attempt.id, attempt.gradingStartedAt)).toBeNull();
+      const future = new Date(Date.parse(attempt.gradingStartedAt) + 1).toISOString();
+      const reopened = await repo.reopenGrading(attempt.id, future);
+      expect(reopened?.gradingStatus).toBe("pending");
+      expect(Date.parse(reopened!.gradingStartedAt)).toBeGreaterThanOrEqual(Date.parse(attempt.gradingStartedAt));
+    });
+
     it("marks a pending attempt failed, and reopens a failed one", async () => {
       const attempt = await pendingAttempt();
 
-      expect(await repo.reopenFailedGrading(attempt.id)).toBeNull();
+      expect(await repo.reopenGrading(attempt.id, stalledBefore)).toBeNull();
       expect((await repo.markGradingFailed(attempt.id))?.gradingStatus).toBe("failed");
       expect(await repo.recordGrade(attempt.id, grade)).toBeNull();
       expect(await repo.markGradingFailed(attempt.id)).toBeNull();
-      expect((await repo.reopenFailedGrading(attempt.id))?.gradingStatus).toBe("pending");
+      expect((await repo.reopenGrading(attempt.id, stalledBefore))?.gradingStatus).toBe("pending");
       expect((await repo.recordGrade(attempt.id, grade))?.gradingStatus).toBe("graded");
       expect(await repo.markGradingFailed(attempt.id)).toBeNull();
-      expect(await repo.reopenFailedGrading("missing")).toBeNull();
+      expect(await repo.reopenGrading("missing", stalledBefore)).toBeNull();
     });
   });
 

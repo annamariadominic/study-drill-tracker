@@ -28,6 +28,7 @@ function attempt(overrides: Partial<GradedAttempt> = {}): GradedAttempt {
     submittedAnswer: "Retrying is safe.",
     confidence: "partial",
     advancesConceptIds: ["c1"],
+    gradingStartedAt: new Date().toISOString(),
     gradingStatus: "graded",
     correctness: "partial",
     gradedExplanation: "You missed why retrying is safe.",
@@ -156,6 +157,16 @@ describe("AttemptFeedback while grading", () => {
     expect(markup).toContain('action="/api/attempts/a1/grading"');
     expect(markup).toMatch(/method="post"/);
     expect(text).not.toContain("A strong answer");
+  });
+
+  it("offers to retry a grade stalled past the time limit", () => {
+    const stalled = { ...ungraded("pending"), gradingStartedAt: "2000-01-01T00:00:00.000Z" };
+
+    const text = feedbackText(question("recall"), stalled);
+
+    expect(text).toContain("couldn't be graded");
+    expect(text).toContain("Retry grading");
+    expect(text).not.toContain("Grading…");
   });
 });
 

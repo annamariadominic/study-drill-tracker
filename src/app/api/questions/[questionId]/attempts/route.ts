@@ -8,9 +8,9 @@ import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
 /**
  * A free-text answer is graded after the response has gone (ADR 0011), which
- * this bounds. Grading usually takes 4–8 s; the rest is room for a slow or
- * retried LLM call to finish, and so mark the Attempt failed rather than
- * leave it pending.
+ * this bounds; it must match GRADING_TIME_LIMIT_MS. Grading usually takes
+ * 4–8 s; the rest is room for a slow or retried LLM call to finish, and so
+ * mark the Attempt failed rather than leave it pending.
  */
 export const maxDuration = 300;
 

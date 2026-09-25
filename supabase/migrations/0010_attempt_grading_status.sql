@@ -21,3 +21,9 @@ alter table attempts
 alter table attempts
   add constraint attempts_graded_has_grade
     check (grading_status <> 'graded' or (correctness is not null and graded_explanation is not null));
+
+-- When grading last started, at submission or on a retry. Grading runs within
+-- a route's max duration, so an Attempt still pending well past this can no
+-- longer be graded by that run, and may be retried as if it had failed.
+alter table attempts
+  add column grading_started_at timestamptz not null default now();

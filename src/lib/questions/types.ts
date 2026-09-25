@@ -56,6 +56,8 @@ type AttemptBase = {
    * before the decision was stored, which were graded and applied at once.
    */
   advancesConceptIds: string[];
+  /** When grading last started: at submission, or on a retry. */
+  gradingStartedAt: string;
   createdAt: string;
 };
 

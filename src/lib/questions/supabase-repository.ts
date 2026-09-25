@@ -37,6 +37,7 @@ type AttemptRow = {
   confidence: Confidence;
   grading_status: GradingStatus;
   advances_concept_ids: string[];
+  grading_started_at: string;
   correctness: Correctness | null;
   graded_explanation: string | null;
   reference_answer: string | null;
@@ -76,6 +77,7 @@ function toAttempt(row: AttemptRow): Attempt {
     submittedAnswer: row.submitted_answer,
     confidence: row.confidence,
     advancesConceptIds: row.advances_concept_ids,
+    gradingStartedAt: row.grading_started_at,
     createdAt: row.created_at,
   };
   if (row.grading_status !== "graded") {
@@ -91,7 +93,12 @@ function toAttempt(row: AttemptRow): Attempt {
   };
 }
 
-function toGradeColumns(grade: AttemptGrade) {
+/** The columns a change of grading status may write. */
+type GradingColumns = Partial<
+  Pick<AttemptRow, "grading_status" | "grading_started_at" | "correctness" | "graded_explanation" | "reference_answer">
+>;
+
+function toGradeColumns(grade: AttemptGrade): GradingColumns {
   return {
     correctness: grade.correctness,
     graded_explanation: grade.gradedExplanation,
@@ -184,32 +191,35 @@ export class SupabaseQuestionsRepository implements QuestionsRepository {
   }
 
   async recordGrade(id: string, grade: AttemptGrade): Promise<GradedAttempt | null> {
-    const attempt = await this.updateGradingStatus(id, "pending", { grading_status: "graded", ...toGradeColumns(grade) });
+    const attempt = await this.updateGrading(id, "grading_status.eq.pending", {
+      grading_status: "graded",
+      ...toGradeColumns(grade),
+    });
     return attempt as GradedAttempt | null;
   }
 
   async markGradingFailed(id: string): Promise<Attempt | null> {
-    return this.updateGradingStatus(id, "pending", { grading_status: "failed" });
+    return this.updateGrading(id, "grading_status.eq.pending", { grading_status: "failed" });
   }
 
-  async reopenFailedGrading(id: string): Promise<Attempt | null> {
-    return this.updateGradingStatus(id, "failed", { grading_status: "pending" });
+  async reopenGrading(id: string, stalledBefore: string): Promise<Attempt | null> {
+    return this.updateGrading(
+      id,
+      `grading_status.eq.failed,and(grading_status.eq.pending,grading_started_at.lt."${stalledBefore}")`,
+      { grading_status: "pending", grading_started_at: new Date().toISOString() },
+    );
   }
 
   /**
-   * Updates the Attempt only while its grading status is still `from`, in one
-   * statement, so concurrent gradings can't both move it.
+   * Updates the Attempt only while it matches `when` (a PostgREST `or`
+   * filter), in one statement, so concurrent gradings can't both move it.
    */
-  private async updateGradingStatus(
-    id: string,
-    from: GradingStatus,
-    changes: Record<string, unknown>,
-  ): Promise<Attempt | null> {
+  private async updateGrading(id: string, when: string, changes: GradingColumns): Promise<Attempt | null> {
     const { data, error } = await this.client
       .from("attempts")
       .update(changes)
       .eq("id", id)
-      .eq("grading_status", from)
+      .or(when)
       .select()
       .maybeSingle();
     if (error) throw error;

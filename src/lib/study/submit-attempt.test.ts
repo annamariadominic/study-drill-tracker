@@ -8,6 +8,7 @@ import type { QuestionsRepository } from "@/lib/questions/repository";
 import type { LlmPort } from "@/lib/llm/port";
 import type { SyllabusRepository } from "@/lib/syllabus/repository";
 import { GradingNotFailedError } from "./errors";
+import { GRADING_TIME_LIMIT_MS } from "./grading";
 import { scheduleFromFields, scheduleNextReview } from "./scheduling";
 import { gradeAttempt, retryGrading, submitAttempt } from "./submit-attempt";
 
@@ -863,6 +864,24 @@ describe("submitAttempt", () => {
 
       const graded = await gradeAttempt(deps, pending.id);
       expect(graded).toMatchObject({ gradingStatus: "graded", correctness: "correct" });
+      expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
+    });
+
+    it("retries an Attempt left pending past the grading time limit, as grading can no longer finish", async () => {
+      const { deps, questionsRepo, syllabusRepo, concept, recall } = await recallSetup();
+      const pending = await submitAttempt(deps, {
+        questionId: recall.id,
+        confidence: "confident",
+        submittedAnswer: "No extra effect.",
+      });
+      const stalledAt = new Date(Date.parse(pending.gradingStartedAt) + GRADING_TIME_LIMIT_MS + 1);
+
+      const reopened = await retryGrading(deps, pending.id, stalledAt);
+      expect(reopened.gradingStatus).toBe("pending");
+      expect(Date.parse(reopened.gradingStartedAt)).toBeGreaterThanOrEqual(Date.parse(pending.gradingStartedAt));
+
+      await gradeAttempt(deps, pending.id);
+      expect((await questionsRepo.getAttempt(pending.id))?.gradingStatus).toBe("graded");
       expect((await syllabusRepo.getConcept(concept.id))?.reviewIntervalDays).toBeGreaterThan(1);
     });
 

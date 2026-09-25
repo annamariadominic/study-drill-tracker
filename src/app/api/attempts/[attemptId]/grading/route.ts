@@ -3,10 +3,11 @@ import { getLlmPort } from "@/lib/llm/get-port";
 import { NotFoundError } from "@/lib/questions/errors";
 import { getQuestionsRepository } from "@/lib/questions/get-repository";
 import { GradingNotFailedError } from "@/lib/study/errors";
+import { feedbackPath } from "@/lib/study/grading";
 import { gradeAttempt, retryGrading } from "@/lib/study/submit-attempt";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 
-/** As for the attempts route: a retried grade runs after the response. */
+/** As for the attempts route: a retried grade runs after the response, within GRADING_TIME_LIMIT_MS. */
 export const maxDuration = 300;
 
 /** Where an Attempt's grading has got to, polled by its feedback screen until it's no longer pending. */
@@ -20,8 +21,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 }
 
 /**
- * Retries a failed grade: the Attempt goes back to pending, the learner back
- * to its feedback, and the grading runs again after the response.
+ * Retries a failed (or stalled) grade: the Attempt goes back to pending, the
+ * learner back to its feedback, and the grading runs again after the response.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ attemptId: string }> }) {
   const { attemptId } = await params;
@@ -39,14 +40,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       gradeAttempt({ questionsRepo, syllabusRepo: getSyllabusRepository(), llmPort: getLlmPort() }, attempt.id),
     );
   } catch (error) {
-    // Already pending or graded (a second click, say): the feedback shows where it's got to.
+    // Still grading, or graded (a second click, say): the feedback shows where it's got to.
     if (!(error instanceof GradingNotFailedError)) {
       throw error;
     }
   }
 
-  const feedback = question.drillId
-    ? `/study/drills/${encodeURIComponent(question.drillId)}`
-    : `/study/questions/${question.id}`;
-  return NextResponse.redirect(new URL(`${feedback}?attemptId=${attempt.id}`, request.url), { status: 303 });
+  return NextResponse.redirect(new URL(feedbackPath(question, attempt.id), request.url), { status: 303 });
 }
