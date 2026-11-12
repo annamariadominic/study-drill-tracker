@@ -1,5 +1,6 @@
 import { CalendarDays, List, type LucideIcon } from "lucide-react";
 import { ReviewSchedule, type ReviewScheduleView } from "@/components/study/review-schedule";
+import { SpreadBacklog } from "@/components/study/spread-backlog";
 import { PageHeader } from "@/components/ui/page-header";
 import { PendingLink } from "@/components/ui/pending-link";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
@@ -14,13 +15,16 @@ const VIEWS: { value: ReviewScheduleView; label: string; icon: LucideIcon; href:
 export default async function ReviewSchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; spread?: string; days?: string }>;
 }) {
-  const { view: viewParam } = await searchParams;
+  const { view: viewParam, spread, days } = await searchParams;
   const view: ReviewScheduleView = viewParam === "calendar" ? "calendar" : "list";
   const studiedConcepts = await getSyllabusRepository().listStudiedConcepts();
   const scheduledReviews = listScheduledReviews(studiedConcepts);
   const renderedAt = new Date().toISOString();
+  const dueCount = scheduledReviews.filter((review) => Date.parse(review.dueAt) <= Date.parse(renderedAt)).length;
+  const spreadCount = Number(spread);
+  const spreadDays = Number(days);
 
   return (
     <>
@@ -54,6 +58,18 @@ export default async function ReviewSchedulePage({
           </nav>
         }
       />
+
+      {spreadCount > 0 && spreadDays > 0 ? (
+        <p
+          role="status"
+          className="mb-6 rounded-control border border-accent/30 bg-accent-wash px-3.5 py-2.5 text-sm text-text"
+        >
+          Spread {spreadCount} review{spreadCount === 1 ? "" : "s"} over{" "}
+          {spreadDays === 1 ? "today" : `the next ${spreadDays} days, starting today`}.
+        </p>
+      ) : null}
+
+      {dueCount > 0 ? <SpreadBacklog dueCount={dueCount} view={view} /> : null}
 
       <ReviewSchedule
         reviews={scheduledReviews}
