@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/input";
 import { PageHeader, SectionHeading } from "@/components/ui/page-header";
 import { PendingSubmit } from "@/components/ui/pending-submit";
+import { SpreadBacklogLink } from "@/components/study/spread-backlog";
 import { buttonVariants } from "@/components/ui/button";
 import { getSyllabusRepository } from "@/lib/syllabus/get-repository";
 import type { StudiedConcept } from "@/lib/syllabus/types";
@@ -28,6 +29,12 @@ export default async function StudyPage({
 }) {
   const { error } = await searchParams;
   const studiedConcepts = await getSyllabusRepository().listStudiedConcepts();
+  const renderedAt = new Date().toISOString();
+  const dueAts = studiedConcepts.flatMap(({ concept }) =>
+    concept.nextReviewDueAt !== null && Date.parse(concept.nextReviewDueAt) <= Date.parse(renderedAt)
+      ? [concept.nextReviewDueAt]
+      : [],
+  );
 
   return (
     <>
@@ -46,6 +53,7 @@ export default async function StudyPage({
           Drill any time: your whole library, one Subject, or Concepts you pick.
         </StudyRoute>
       </div>
+      <SpreadBacklogLink dueAts={dueAts} now={renderedAt} className="mt-4" />
 
       <section aria-labelledby="single-question-heading" className="mt-14">
         <SectionHeading id="single-question-heading">Ask a single question</SectionHeading>
