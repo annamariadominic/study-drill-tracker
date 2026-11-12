@@ -1,11 +1,12 @@
 "use client";
 
-import { CalendarSync } from "lucide-react";
+import { CalendarSync, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PendingSubmit } from "@/components/ui/pending-submit";
-import { MAX_REVIEWS_PER_DAY, MIN_REVIEWS_PER_DAY } from "@/lib/syllabus/spread-backlog";
+import { countDueBeforeToday, MAX_REVIEWS_PER_DAY, MIN_REVIEWS_PER_DAY } from "@/lib/syllabus/spread-backlog";
 import { useLearnerTimeZone } from "./use-learner-time-zone";
 
 const DEFAULT_PER_DAY = 5;
@@ -14,19 +15,39 @@ function reviews(count: number) {
   return `${count} review${count === 1 ? "" : "s"}`;
 }
 
+type BacklogProps = {
+  /** `nextReviewDueAt` of every Concept due now. */
+  dueAts: string[];
+  /** When the page was rendered, as an ISO timestamp. */
+  now: string;
+};
+
+/** Whether anything due now has been waiting since before today, in the learner's time zone. */
+function useHasBacklog({ dueAts, now }: BacklogProps): boolean {
+  const timeZone = useLearnerTimeZone();
+  return countDueBeforeToday(dueAts, { now: new Date(now), timeZone }) > 0;
+}
+
 /**
  * For catching up after falling behind: re-dates everything due now over the
- * coming days, at most so many reviews a day. Kept closed until asked for, and
- * says what it will move before anything does.
+ * coming days, at most so many reviews a day. Shown only while something has
+ * been due since before today, kept closed until asked for (or arrived at with
+ * `open`), and says what it will move before anything does.
  */
-export function SpreadBacklog({ dueCount, view }: { dueCount: number; view: string }) {
+export function SpreadBacklog({ dueAts, now, view, open = false }: BacklogProps & { view: string; open?: boolean }) {
   const timeZone = useLearnerTimeZone();
+  const hasBacklog = useHasBacklog({ dueAts, now });
+  const dueCount = dueAts.length;
   const [perDay, setPerDay] = useState(String(DEFAULT_PER_DAY));
   const limit = Number(perDay);
   const valid = Number.isInteger(limit) && limit >= MIN_REVIEWS_PER_DAY && limit <= MAX_REVIEWS_PER_DAY;
 
+  if (!hasBacklog) {
+    return null;
+  }
+
   return (
-    <details className="group mb-8 rounded-control border border-line px-4 py-3">
+    <details open={open} className="group mb-8 rounded-control border border-line px-4 py-3">
       <summary className="flex cursor-pointer list-none items-center gap-2 text-sm text-muted select-none hover:text-text [&::-webkit-details-marker]:hidden">
         <CalendarSync aria-hidden className="size-4 shrink-0" />
         <span>
@@ -75,5 +96,27 @@ export function SpreadBacklog({ dueCount, view }: { dueCount: number; view: stri
         </div>
       </form>
     </details>
+  );
+}
+
+/** Points from elsewhere to the schedule's spread panel, while there's a backlog to spread. */
+export function SpreadBacklogLink({ dueAts, now, className }: BacklogProps & { className?: string }) {
+  const hasBacklog = useHasBacklog({ dueAts, now });
+  if (!hasBacklog) {
+    return null;
+  }
+  return (
+    <Link
+      href="/study/schedule?catch-up=1"
+      className={`group inline-flex items-center gap-2 text-sm text-muted hover:text-text ${className ?? ""}`}
+    >
+      <CalendarSync aria-hidden className="size-4 shrink-0" />
+      <span>
+        Fallen behind?{" "}
+        <span className="text-accent group-hover:text-accent-strong">Spread your {reviews(dueAts.length)} due now</span>{" "}
+        over the coming days.
+      </span>
+      <ChevronRight aria-hidden className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+    </Link>
   );
 }

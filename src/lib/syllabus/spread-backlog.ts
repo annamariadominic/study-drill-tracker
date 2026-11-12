@@ -14,6 +14,16 @@ export type BacklogSpread = {
   days: number;
 };
 
+/**
+ * How many of `dueAts` fell due on an earlier calendar day than `now` in
+ * `timeZone`. A review that came due today isn't a backlog yet, so a spread
+ * that has just put reviews on today doesn't offer to spread them again.
+ */
+export function countDueBeforeToday(dueAts: string[], { now, timeZone }: { now: Date; timeZone: string }): number {
+  const today = calendarDate(now, timeZone);
+  return dueAts.filter((dueAt) => calendarDate(new Date(dueAt), timeZone) < today).length;
+}
+
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setUTCDate(result.getUTCDate() + days);

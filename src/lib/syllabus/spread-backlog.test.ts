@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeSyllabusRepository } from "./fake-repository";
 import { calendarDate } from "./review-schedule";
-import { spreadBacklog } from "./spread-backlog";
+import { countDueBeforeToday, spreadBacklog } from "./spread-backlog";
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date("2026-11-12T15:00:00Z");
@@ -111,5 +111,29 @@ describe("spreadBacklog", () => {
 
     expect(spread).toEqual({ moves: [], days: 0 });
     expect(await dueDates()).toEqual({ Later: "2026-11-15" });
+  });
+});
+
+describe("countDueBeforeToday", () => {
+  it("counts only reviews that fell due on an earlier day in the learner's time zone", () => {
+    // 07:00 on Nov 12 in Los Angeles.
+    const dueAts = [
+      "2026-11-12T08:00:00Z", // 00:00 Nov 12 in LA: today
+      "2026-11-12T07:59:00Z", // 23:59 Nov 11 in LA: yesterday
+      "2026-10-01T12:00:00Z",
+      NOW.toISOString(),
+    ];
+
+    expect(countDueBeforeToday(dueAts, { now: NOW, timeZone: TIME_ZONE })).toBe(2);
+  });
+
+  it("finds no backlog right after a spread has put reviews on today", async () => {
+    const { repo, studied } = await seed();
+    await studied("Overdue", { intervalDays: 1, dueInDays: -10 });
+    await spreadBacklog(repo, { perDay: 5, timeZone: TIME_ZONE }, NOW);
+
+    const dueAts = (await repo.listStudiedConcepts()).map(({ concept }) => concept.nextReviewDueAt!);
+
+    expect(countDueBeforeToday(dueAts, { now: NOW, timeZone: TIME_ZONE })).toBe(0);
   });
 });

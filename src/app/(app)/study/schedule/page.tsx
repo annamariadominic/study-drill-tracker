@@ -15,14 +15,16 @@ const VIEWS: { value: ReviewScheduleView; label: string; icon: LucideIcon; href:
 export default async function ReviewSchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; spread?: string; days?: string }>;
+  searchParams: Promise<{ view?: string; spread?: string; days?: string; "catch-up"?: string }>;
 }) {
-  const { view: viewParam, spread, days } = await searchParams;
+  const { view: viewParam, spread, days, "catch-up": catchUp } = await searchParams;
   const view: ReviewScheduleView = viewParam === "calendar" ? "calendar" : "list";
   const studiedConcepts = await getSyllabusRepository().listStudiedConcepts();
   const scheduledReviews = listScheduledReviews(studiedConcepts);
   const renderedAt = new Date().toISOString();
-  const dueCount = scheduledReviews.filter((review) => Date.parse(review.dueAt) <= Date.parse(renderedAt)).length;
+  const dueAts = scheduledReviews
+    .map((review) => review.dueAt)
+    .filter((dueAt) => Date.parse(dueAt) <= Date.parse(renderedAt));
   const spreadCount = Number(spread);
   const spreadDays = Number(days);
 
@@ -69,7 +71,7 @@ export default async function ReviewSchedulePage({
         </p>
       ) : null}
 
-      {dueCount > 0 ? <SpreadBacklog dueCount={dueCount} view={view} /> : null}
+      <SpreadBacklog dueAts={dueAts} now={renderedAt} view={view} open={catchUp === "1"} />
 
       <ReviewSchedule
         reviews={scheduledReviews}
