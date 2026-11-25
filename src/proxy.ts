@@ -21,6 +21,6 @@ export async function proxy(request: NextRequest) {
 // session cookie (ADR 0005).
 export const config = {
   matcher: [
-    "/((?!login(?:/|$)|api/login(?:/|$)|api/cron/due-reminder(?:/|$)|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login(?:/|$)|api/login(?:/|$)|api/cron/due-reminder(?:/|$)|_next/static|_next/image|favicon.ico|icon.svg).*)",
   ],
 };
