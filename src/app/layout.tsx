@@ -17,6 +17,11 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "Study Drill Tracker",
   description: "Personal spaced-repetition study tracker.",
+  // The label and status bar when added to an iPhone's Home Screen.
+  appleWebApp: {
+    title: "Study Drills",
+    statusBarStyle: "black",
+  },
 };
 
 export const viewport: Viewport = {

@@ -21,6 +21,12 @@ describe("proxy", () => {
     expect(unstable_doesMiddlewareMatch({ config, url: "/api/cron/due-reminder" })).toBe(false);
   });
 
+  it("serves the icons and manifest without a session", () => {
+    for (const url of ["/favicon.ico", "/icon.svg", "/apple-icon.png", "/manifest.webmanifest"]) {
+      expect(unstable_doesMiddlewareMatch({ config, url })).toBe(false);
+    }
+  });
+
   it("guards the rest of the app with the session cookie", () => {
     expect(unstable_doesMiddlewareMatch({ config, url: "/study/due" })).toBe(true);
     expect(unstable_doesMiddlewareMatch({ config, url: "/api/drills" })).toBe(true);
