@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isCorrectPassword } from "@/lib/auth/password";
 import { createSessionToken } from "@/lib/auth/session";
-import { SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } from "@/lib/auth/constants";
+import { SESSION_COOKIE_NAME, SESSION_COOKIE_OPTIONS } from "@/lib/auth/constants";
 import { getAppPassword, getSessionSecret } from "@/lib/auth/env";
 
 export async function POST(request: NextRequest) {
@@ -16,12 +16,6 @@ export async function POST(request: NextRequest) {
 
   const token = await createSessionToken(getSessionSecret());
   const response = NextResponse.redirect(new URL("/", request.url), { status: 303 });
-  response.cookies.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    maxAge: SESSION_DURATION_SECONDS,
-    path: "/",
-  });
+  response.cookies.set(SESSION_COOKIE_NAME, token, SESSION_COOKIE_OPTIONS);
   return response;
 }
